@@ -1,0 +1,17 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
+  NEXT_PUBLIC_API_URL = "https://remindmap.netlify.app"
+
+[context.deploy-preview.environment]
+  NEXT_PUBLIC_API_URL = "https://deploy-preview-*.remindmap.netlify.app"
+
+[context.branch-deploy.environment]
+  NEXT_PUBLIC_API_URL = "https://branch-deploy-*.remindmap.netlify.app"
