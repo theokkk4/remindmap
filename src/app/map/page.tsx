@@ -1043,7 +1043,8 @@ export default function MapPage() {
                 </div>
               </>
             )}
-          </div>
+            </div>
+          )}
 
         {/* Panel Toggle Button (when hidden) */}
         {!showRightPanel && (
