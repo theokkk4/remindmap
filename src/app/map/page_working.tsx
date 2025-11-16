@@ -930,7 +930,6 @@ export default function MapPage() {
               </>
             )}
           </div>
-          )}
 
         {/* Bottom Control Bar */}
         <div className="bottom-control-bar">
