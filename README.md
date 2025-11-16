@@ -321,10 +321,10 @@ Built with ❤️ for productivity enthusiasts, visual thinkers, and teams who v
 
 ## 📧 Contact & Links
 
-- **Live Demo**: [Coming Soon]
-- **GitHub**: [https://github.com/yourusername/remindmap](https://github.com/yourusername/remindmap)
+- **Live Demo**: [Coming Soon - Deploying Now!]
+- **GitHub**: [https://github.com/theokkk4/remindmap](https://github.com/theokkk4/remindmap)
 - **DevPost**: [Project Link]
-- **Issues**: [GitHub Issues](https://github.com/yourusername/remindmap/issues)
+- **Issues**: [GitHub Issues](https://github.com/theokkk4/remindmap/issues)
 
 ---
 

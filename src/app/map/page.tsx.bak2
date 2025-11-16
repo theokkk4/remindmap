@@ -40,6 +40,8 @@ export default function MapPage() {
   const [sessionStart] = useState(new Date());
   const [sessionNodesAdded, setSessionNodesAdded] = useState(0);
   const [sessionNodesRemoved, setSessionNodesRemoved] = useState(0);
+  const [currentWorkspace, setCurrentWorkspace] = useState('personal');
+  const [showWorkspaceSelector, setShowWorkspaceSelector] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
@@ -528,6 +530,92 @@ export default function MapPage() {
     return `${minutes} minutes`;
   };
 
+  // AI-Powered Deadline Prediction
+  const predictDeadlineRisk = useCallback(() => {
+    if (nodes.length === 0) return { risk: 'none', count: 0, message: 'No deadlines to analyze' };
+
+    const now = new Date();
+    const upcomingDeadlines = nodes.filter(n => {
+      if (!n.dueDate) return false;
+      const dueDate = new Date(n.dueDate);
+      const daysUntil = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return daysUntil >= 0 && daysUntil <= 7;
+    });
+
+    const urgentCount = upcomingDeadlines.filter(n =>
+      n.priority === 'high' || n.priority === 'urgent'
+    ).length;
+
+    if (urgentCount >= 3) {
+      return { risk: 'high', count: urgentCount, message: 'High workload: 3+ urgent items this week' };
+    } else if (upcomingDeadlines.length >= 5) {
+      return { risk: 'medium', count: upcomingDeadlines.length, message: '5+ items due this week' };
+    } else if (upcomingDeadlines.length > 0) {
+      return { risk: 'low', count: upcomingDeadlines.length, message: 'Manageable workload' };
+    }
+    return { risk: 'none', count: 0, message: 'No upcoming deadlines' };
+  }, [nodes]);
+
+  // Conflict Detection AI
+  const detectConflicts = useCallback(() => {
+    const conflicts: string[] = [];
+    const today = new Date().toISOString().split('T')[0];
+
+    // Group nodes by due date
+    const dateGroups = nodes.reduce((acc, node) => {
+      if (node.dueDate) {
+        if (!acc[node.dueDate]) acc[node.dueDate] = [];
+        acc[node.dueDate].push(node);
+      }
+      return acc;
+    }, {} as Record<string, CanvasNode[]>);
+
+    // Check for conflicts
+    Object.entries(dateGroups).forEach(([date, nodesOnDate]) => {
+      if (nodesOnDate.length >= 3) {
+        const urgentOnDate = nodesOnDate.filter(n => n.priority === 'high' || n.priority === 'urgent').length;
+        if (urgentOnDate >= 2) {
+          conflicts.push(`${date}: ${urgentOnDate} urgent items compete`);
+        } else {
+          conflicts.push(`${date}: ${nodesOnDate.length} items due`);
+        }
+      }
+    });
+
+    // Check for nodes without due dates that have reminders
+    const reminderNoDate = nodes.filter(n => n.reminderEnabled && !n.dueDate).length;
+    if (reminderNoDate > 0) {
+      conflicts.push(`${reminderNoDate} reminders without due dates`);
+    }
+
+    return conflicts;
+  }, [nodes]);
+
+  // Workload Distribution Analysis
+  const analyzeWorkload = useCallback(() => {
+    const priorityCount = {
+      urgent: nodes.filter(n => n.priority === 'urgent').length,
+      high: nodes.filter(n => n.priority === 'high').length,
+      medium: nodes.filter(n => n.priority === 'medium').length,
+      low: nodes.filter(n => n.priority === 'low').length
+    };
+
+    const total = nodes.length;
+    if (total === 0) return 'No tasks to analyze';
+
+    const urgentPercent = Math.round((priorityCount.urgent / total) * 100);
+    const highPercent = Math.round((priorityCount.high / total) * 100);
+
+    if (urgentPercent > 40) {
+      return 'Overloaded: Too many urgent items. Consider reprioritizing.';
+    } else if ((urgentPercent + highPercent) > 60) {
+      return 'Heavy workload: Consider breaking down high-priority items.';
+    } else if (priorityCount.low > total * 0.7) {
+      return 'Light workload: Good time to tackle long-term goals.';
+    }
+    return 'Balanced workload: Well-distributed priorities.';
+  }, [nodes]);
+
   const exportAsJSON = () => {
     // Remove coordinates from export
     const exportData = nodes.map(({ x, y, ...rest }) => rest);
@@ -652,7 +740,7 @@ export default function MapPage() {
 
   return (
     <>
-      <style>{`
+      <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
         * {
@@ -686,7 +774,98 @@ export default function MapPage() {
         </div>
       )}
 
-      <div className="map-container" style={{ opacity: isLoading ? 0 : 1, transition: 'opacity 0.5s ease' }}>
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .map-container {
+          width: 100vw;
+          height: 100vh;
+          overflow: hidden;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+          position: fixed;
+          inset: 0;
+          background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+        }
+
+        .loading-content {
+          text-align: center;
+          animation: fadeInScale 0.6s ease-out;
+        }
+
+        .loading-logo {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 1rem;
+          margin-bottom: 2rem;
+        }
+
+        .loading-icon {
+          font-size: 3rem;
+          animation: pulse 2s ease-in-out infinite;
+        }
+
+        .loading-title {
+          font-size: 2.5rem;
+          font-weight: 700;
+          background: linear-gradient(135deg, #60a5fa, #a78bfa);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        .loading-spinner {
+          margin: 2rem auto;
+        }
+
+        .spinner {
+          width: 50px;
+          height: 50px;
+          border: 3px solid rgba(96, 165, 250, 0.1);
+          border-top-color: #60a5fa;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+          color: #94a3b8;
+          font-size: 0.95rem;
+          margin-top: 1rem;
+        }
+
+        @keyframes fadeInScale {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
+
+      {!isLoading && (
+      <div className="map-container" style={{ animation: 'fadeIn 0.5s ease' }}>
         {/* Navbar */}
         <nav className="navbar">
           <div className="navbar-logo" onClick={() => router.push('/')}>
@@ -884,7 +1063,10 @@ export default function MapPage() {
               <>
                 <div className="panel-header">
                   <h3>📊 Insights & Stats</h3>
-                  <button className="panel-close" onClick={() => setShowMapStats(true)}>📈</button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="panel-close" onClick={() => setShowMapStats(true)} title="Detailed Stats">📈</button>
+                    <button className="panel-close" onClick={() => setShowRightPanel(false)} title="Hide Panel">▶</button>
+                  </div>
                 </div>
                 <div className="panel-content">
                   <div className="insight-section">
@@ -901,6 +1083,28 @@ export default function MapPage() {
                       <div className="insight-label">Suggested Action</div>
                       <div className="insight-value">{getInsights().suggestion}</div>
                     </div>
+                  </div>
+
+                  <div className="insight-section">
+                    <div className="insight-header">🤖 AI-Powered Insights</div>
+                    <div className="insight-item">
+                      <div className="insight-label">Deadline Risk</div>
+                      <div className={`insight-value risk-${predictDeadlineRisk().risk}`}>
+                        {predictDeadlineRisk().message}
+                      </div>
+                    </div>
+                    <div className="insight-item">
+                      <div className="insight-label">Workload Analysis</div>
+                      <div className="insight-value">{analyzeWorkload()}</div>
+                    </div>
+                    {detectConflicts().length > 0 && (
+                      <div className="insight-item">
+                        <div className="insight-label">⚠️ Conflicts Detected</div>
+                        <div className="insight-value conflict-warning">
+                          {detectConflicts().slice(0, 2).join('; ')}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="insight-section">
@@ -924,12 +1128,24 @@ export default function MapPage() {
                   </div>
 
                   <div className="insight-tip">
-                    💡 Click any node to edit it
+                    💡 Click any node to edit it | Workspace: <strong>{currentWorkspace}</strong>
                   </div>
                 </div>
               </>
             )}
-          </div>
+            </div>
+          )}
+
+        {/* Panel Toggle Button (when hidden) */}
+        {!showRightPanel && (
+          <button
+            className="panel-toggle-btn"
+            onClick={() => setShowRightPanel(true)}
+            title="Show Insights Panel"
+          >
+            ◀
+          </button>
+        )}
 
         {/* Bottom Control Bar */}
         <div className="bottom-control-bar">
@@ -984,6 +1200,14 @@ export default function MapPage() {
                 <div className="tip-item">
                   <span className="tip-icon">⌨️</span>
                   <p><strong>Shortcuts:</strong> N = New Node | S = Export | I = Stats</p>
+                </div>
+                <div className="tip-item">
+                  <span className="tip-icon">🎨</span>
+                  <p><strong>Sidebar Buttons:</strong> ➕ Add Node | 🗑️ Delete | 📐 Reset View | ⚡ Clear All</p>
+                </div>
+                <div className="tip-item">
+                  <span className="tip-icon">📊</span>
+                  <p><strong>Panel Controls:</strong> 📈 Detailed Stats | ▶ Hide/Show Panel</p>
                 </div>
               </div>
             </div>
@@ -1042,8 +1266,14 @@ export default function MapPage() {
           </div>
         )}
       </div>
+      )}
 
-      <style>{`
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
         .map-container {
           width: 100vw;
           height: 100vh;
@@ -1359,6 +1589,46 @@ export default function MapPage() {
           overflow: hidden;
           background: radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
                       radial-gradient(circle at 80% 80%, rgba(79, 70, 229, 0.05) 0%, transparent 50%);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .panel-toggle-btn {
+          position: fixed;
+          right: 1rem;
+          top: 50%;
+          transform: translateY(-50%);
+          background: rgba(59, 130, 246, 0.15);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          border-radius: 8px 0 0 8px;
+          color: #60a5fa;
+          font-size: 1.25rem;
+          width: 40px;
+          height: 80px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          backdrop-filter: blur(10px);
+          z-index: 45;
+          animation: slideInFromRight 0.3s ease-out;
+        }
+
+        .panel-toggle-btn:hover {
+          background: rgba(59, 130, 246, 0.25);
+          transform: translateY(-50%) translateX(-2px);
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+
+        @keyframes slideInFromRight {
+          from {
+            transform: translateY(-50%) translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(-50%) translateX(0);
+            opacity: 1;
+          }
         }
 
         canvas {
@@ -1460,6 +1730,30 @@ export default function MapPage() {
           color: #94a3b8;
           font-size: 0.9rem;
           text-align: center;
+        }
+
+        .risk-high {
+          color: #ef4444 !important;
+          font-weight: 700;
+        }
+
+        .risk-medium {
+          color: #f59e0b !important;
+          font-weight: 600;
+        }
+
+        .risk-low {
+          color: #10b981 !important;
+        }
+
+        .risk-none {
+          color: #94a3b8 !important;
+        }
+
+        .conflict-warning {
+          color: #f59e0b !important;
+          font-size: 0.85rem;
+          line-height: 1.4;
         }
 
         .form-group {
