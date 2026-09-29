@@ -610,7 +610,6 @@ export default function MapPage() {
           // Add to IndexedDB
           for (const node of validatedNodes) {
             await addItem({
-              id: node.id,
               title: node.title,
               priority: node.priority,
               color: node.color,
@@ -931,6 +930,7 @@ export default function MapPage() {
             )}
           </div>
           )}
+        </div>
 
         {/* Bottom Control Bar */}
         <div className="bottom-control-bar">
