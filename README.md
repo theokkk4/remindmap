@@ -7,7 +7,7 @@
 
 > **The only mind mapping tool with AI-powered deadline risk analysis and conflict detection. Beautiful glass-morphism design meets intelligent insights.**
 
-[🚀 Try Live Demo](#) | [📖 Documentation](#features) | [🎥 Demo Video](#)
+[🚀 Try Live Demo](https://remindmap.vercel.app) | [📖 Documentation](#features) | [🎥 Demo Video](#)
 
 ---
 
@@ -321,7 +321,7 @@ Built with ❤️ for productivity enthusiasts, visual thinkers, and teams who v
 
 ## 📧 Contact & Links
 
-- **Live Demo**: [Coming Soon - Deploying Now!]
+- **Live Demo**: [https://remindmap.vercel.app](https://remindmap.vercel.app)
 - **GitHub**: [https://github.com/theokkk4/remindmap](https://github.com/theokkk4/remindmap)
 - **DevPost**: [Project Link]
 - **Issues**: [GitHub Issues](https://github.com/theokkk4/remindmap/issues)
