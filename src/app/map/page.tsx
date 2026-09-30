@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { getAllItems, addItem, updateItem, deleteItem, clearAllItems } from '@/lib/store/db';
 import type { Item } from '@/lib/types';
 import { requestNotificationPermission, checkReminders } from '@/lib/notifications';
+import { MapEngine } from '@/lib/mapEngine';
+import { SAMPLE_MAP } from '@/lib/sampleMap';
 
 interface CanvasNode {
   id: string;
@@ -23,13 +25,15 @@ interface CanvasNode {
 export default function MapPage() {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const engineRef = useRef<MapEngine | null>(null);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAdd, setQuickAdd] = useState({ title: '', color: '#3b82f6', priority: 'medium' as CanvasNode['priority'] });
+  const [isSeeding, setIsSeeding] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [showTips, setShowTips] = useState(true);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -72,8 +76,8 @@ export default function MapPage() {
       const items = await getAllItems();
       const canvasNodes: CanvasNode[] = items.map((item, index) => ({
         id: item.id,
-        x: (Math.cos(index * Math.PI / 3) * 200) + (Math.random() - 0.5) * 50,
-        y: (Math.sin(index * Math.PI / 3) * 200) + (Math.random() - 0.5) * 50,
+        x: item.x ?? (Math.cos(index * Math.PI / 3) * 200) + (Math.random() - 0.5) * 50,
+        y: item.y ?? (Math.sin(index * Math.PI / 3) * 200) + (Math.random() - 0.5) * 50,
         title: item.title,
         color: item.color || '#3b82f6',
         priority: item.priority || 'medium',
@@ -126,259 +130,45 @@ export default function MapPage() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
-  // Canvas drawing
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Set canvas size
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Background grid
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.05)';
-    ctx.lineWidth = 1;
-    const gridSize = 50 * zoom;
-
-    for (let x = panX % gridSize; x < canvas.width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
-      ctx.stroke();
-    }
-
-    for (let y = panY % gridSize; y < canvas.height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
-
-    // Draw connections
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.15)';
-    ctx.lineWidth = 2 * zoom;
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < Math.min(i + 3, nodes.length); j++) {
-        const from = nodes[i];
-        const to = nodes[j];
-        const x1 = from.x * zoom + canvas.width / 2 + panX;
-        const y1 = from.y * zoom + canvas.height / 2 + panY;
-        const x2 = to.x * zoom + canvas.width / 2 + panX;
-        const y2 = to.y * zoom + canvas.height / 2 + panY;
-
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-    }
-
-    // Draw nodes
-    nodes.forEach(node => {
-      const screenX = node.x * zoom + canvas.width / 2 + panX;
-      const screenY = node.y * zoom + canvas.height / 2 + panY;
-      const radius = 35 * zoom;
-
-      // Outer glow effect
-      const glowGradient = ctx.createRadialGradient(screenX, screenY, radius * 0.8, screenX, screenY, radius * 2.5);
-      glowGradient.addColorStop(0, node.color + '50');
-      glowGradient.addColorStop(0.5, node.color + '20');
-      glowGradient.addColorStop(1, node.color + '00');
-      ctx.fillStyle = glowGradient;
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, radius * 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Main sphere gradient (Enhanced Frutiger Aero)
-      const sphereGradient = ctx.createRadialGradient(
-        screenX - radius / 2.5,
-        screenY - radius / 2.5,
-        0,
-        screenX + radius / 4,
-        screenY + radius / 4,
-        radius * 1.4
-      );
-      sphereGradient.addColorStop(0, node.color + 'ff');
-      sphereGradient.addColorStop(0.4, node.color + 'f5');
-      sphereGradient.addColorStop(0.75, node.color + 'cc');
-      sphereGradient.addColorStop(1, node.color + '80');
-
-      ctx.fillStyle = sphereGradient;
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Subtle rim light (bottom-right)
-      const rimGradient = ctx.createRadialGradient(
-        screenX + radius / 2.5,
-        screenY + radius / 2.5,
-        0,
-        screenX + radius / 2.5,
-        screenY + radius / 2.5,
-        radius / 1.5
-      );
-      rimGradient.addColorStop(0, '#ffffff15');
-      rimGradient.addColorStop(1, '#ffffff00');
-      ctx.fillStyle = rimGradient;
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Enhanced shine effect (top-left)
-      const shineGradient = ctx.createRadialGradient(
-        screenX - radius / 2.2,
-        screenY - radius / 2.2,
-        0,
-        screenX - radius / 4,
-        screenY - radius / 4,
-        radius / 1.8
-      );
-      shineGradient.addColorStop(0, '#ffffffa0');
-      shineGradient.addColorStop(0.4, '#ffffff50');
-      shineGradient.addColorStop(1, '#ffffff00');
-      ctx.fillStyle = shineGradient;
-      ctx.beginPath();
-      ctx.arc(screenX - radius / 3, screenY - radius / 3, radius / 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Subtle inner shadow for depth
-      ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
-      const shadowGradient = ctx.createRadialGradient(
-        screenX,
-        screenY,
-        0,
-        screenX,
-        screenY,
-        radius
-      );
-      shadowGradient.addColorStop(0, '#00000000');
-      shadowGradient.addColorStop(0.85, '#00000000');
-      shadowGradient.addColorStop(1, '#00000020');
-      ctx.fillStyle = shadowGradient;
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Border if selected (with glow)
-      if (selectedNode === node.id) {
-        // Outer selection glow
-        ctx.shadowColor = '#60a5fa';
-        ctx.shadowBlur = 15;
-        ctx.strokeStyle = '#60a5fa80';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, radius + 2, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner selection border
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = '#60a5fa';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Text with wrapping
-      if (zoom > 0.5) {
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        // Adaptive font size based on zoom
-        const baseFontSize = Math.max(10, Math.min(16, 14 * zoom));
-        ctx.font = `600 ${baseFontSize}px 'Space Grotesk', sans-serif`;
-
-        // Word wrapping logic
-        const maxWidth = radius * 1.6; // 80% of sphere width
-        const words = node.title.split(' ');
-        const lines: string[] = [];
-        let currentLine = '';
-
-        for (const word of words) {
-          const testLine = currentLine ? `${currentLine} ${word}` : word;
-          const metrics = ctx.measureText(testLine);
-
-          if (metrics.width > maxWidth && currentLine) {
-            lines.push(currentLine);
-            currentLine = word;
-          } else {
-            currentLine = testLine;
-          }
-        }
-        if (currentLine) {
-          lines.push(currentLine);
-        }
-
-        // Limit to 2-3 lines based on zoom
-        const maxLines = zoom > 1.5 ? 3 : 2;
-        const displayLines = lines.slice(0, maxLines);
-
-        // Add ellipsis if truncated
-        if (lines.length > maxLines) {
-          displayLines[maxLines - 1] = displayLines[maxLines - 1].substring(0, displayLines[maxLines - 1].length - 2) + '...';
-        }
-
-        // Draw lines with proper spacing
-        const lineHeight = baseFontSize * 1.3;
-        const totalHeight = displayLines.length * lineHeight;
-        const startY = screenY - totalHeight / 2 + lineHeight / 2;
-
-        // Add text shadow for better readability
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 1;
-
-        displayLines.forEach((line, index) => {
-          ctx.fillText(line, screenX, startY + index * lineHeight);
-        });
-
-        // Reset shadow
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-      }
-    });
-  }, [nodes, selectedNode, zoom, panX, panY]);
-
+  // Animated canvas: the engine owns rendering, physics and pointer input.
   useEffect(() => {
-    draw();
-    const handleResize = () => draw();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [draw]);
-
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const engine = new MapEngine(canvas, {
+      onSelect: (id) => selectNodeRef.current(id),
+      onMove: (id, x, y) => {
+        setNodes(prev => prev.map(n => (n.id === id ? { ...n, x, y } : n)));
+        updateItem(id, { x, y });
+      },
+      onZoom: (z) => setZoom(Math.round(z * 100) / 100),
+    });
+    engineRef.current = engine;
+    return () => {
+      engine.destroy();
+      engineRef.current = null;
+    };
+  }, []);
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+  useEffect(() => {
+    engineRef.current?.setNodes(nodes);
+  }, [nodes]);
 
-    for (const node of nodes) {
-      const screenX = node.x * zoom + canvas.width / 2 + panX;
-      const screenY = node.y * zoom + canvas.height / 2 + panY;
-      const radius = 35 * zoom;
-      const dx = x - screenX;
-      const dy = y - screenY;
+  useEffect(() => {
+    engineRef.current?.setSelected(selectedNode);
+  }, [selectedNode]);
 
-      if (Math.sqrt(dx * dx + dy * dy) < radius) {
-        selectNode(node.id);
-        return;
-      }
+  useEffect(() => {
+    engineRef.current?.setZoom(zoom);
+  }, [zoom]);
+
+  const selectNodeRef = useRef<(id: string | null) => void>(() => {});
+  selectNodeRef.current = (id) => {
+    if (id) {
+      selectNode(id);
+    } else {
+      setSelectedNode(null);
+      setIsPanelOpen(false);
     }
-    setSelectedNode(null);
-    setIsPanelOpen(false);
   };
 
   const selectNode = (id: string) => {
@@ -399,29 +189,73 @@ export default function MapPage() {
     }
   };
 
-  const handleAddNode = async () => {
-    const title = prompt('Enter node title:');
-    if (!title) return;
+  const handleAddNode = () => {
+    setQuickAdd(q => ({ ...q, title: '' }));
+    setShowQuickAdd(true);
+  };
 
+  const createNode = async (title: string, color: string, priority: CanvasNode['priority'], at?: { x: number; y: number }, extra: Partial<CanvasNode> = {}) => {
+    const pos = at ?? engineRef.current?.suggestPosition(selectedNode) ?? { x: 0, y: 0 };
     const id = await addItem({
       title,
-      priority: 'medium',
-      color: '#3b82f6'
+      priority,
+      color,
+      x: pos.x,
+      y: pos.y,
+      description: extra.description,
+      dueDate: extra.dueDate ? new Date(extra.dueDate) : undefined,
+      reminderEnabled: extra.reminderEnabled,
+      reminderTime: extra.reminderTime,
+      reminderRecurrence: extra.reminderRecurrence,
     });
-
     const newNode: CanvasNode = {
       id,
-      x: (Math.random() - 0.5) * 400,
-      y: (Math.random() - 0.5) * 400,
+      x: pos.x,
+      y: pos.y,
       title,
-      color: '#3b82f6',
-      priority: 'medium',
-      description: '',
-      dueDate: ''
+      color,
+      priority,
+      description: extra.description ?? '',
+      dueDate: extra.dueDate ?? '',
+      reminderEnabled: extra.reminderEnabled ?? false,
+      reminderTime: extra.reminderTime ?? '09:00',
+      reminderRecurrence: extra.reminderRecurrence ?? 'none',
     };
-
-    setNodes([...nodes, newNode]);
+    setNodes(prev => [...prev, newNode]);
     setSessionNodesAdded(prev => prev + 1);
+    return newNode;
+  };
+
+  const submitQuickAdd = async () => {
+    const title = quickAdd.title.trim();
+    if (!title) return;
+    setShowQuickAdd(false);
+    const node = await createNode(title, quickAdd.color, quickAdd.priority);
+    setSelectedNode(node.id);
+    setFormData({
+      title: node.title,
+      priority: node.priority,
+      color: node.color,
+      description: node.description,
+      dueDate: node.dueDate,
+      reminderEnabled: false,
+      reminderTime: '09:00',
+      reminderRecurrence: 'none',
+    });
+    setIsPanelOpen(true);
+  };
+
+  // Builds a sample map one node at a time, so it animates in.
+  const loadSampleMap = async () => {
+    if (isSeeding) return;
+    setIsSeeding(true);
+    setShowTips(false);
+    for (const n of SAMPLE_MAP) {
+      await createNode(n.title, n.color, n.priority, { x: n.x, y: n.y }, n);
+      await new Promise(r => setTimeout(r, 260));
+    }
+    setIsSeeding(false);
+    setTimeout(() => engineRef.current?.fit(), 300);
   };
 
   const handleSaveNode = async () => {
@@ -450,7 +284,6 @@ export default function MapPage() {
 
   const handleDeleteNode = async () => {
     if (!selectedNode) return;
-    if (!confirm('Delete this node?')) return;
 
     await deleteItem(selectedNode);
     setNodes(nodes.filter(n => n.id !== selectedNode));
@@ -643,11 +476,6 @@ export default function MapPage() {
     }
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const newZoom = zoom + (e.deltaY < 0 ? 0.1 : -0.1);
-    setZoom(Math.max(0.3, Math.min(3, newZoom)));
-  };
 
   return (
     <>
@@ -734,9 +562,13 @@ export default function MapPage() {
               <div className="sidebar-tooltip">Delete</div>
             </button>
             <div className="divider"></div>
-            <button className="sidebar-btn" onClick={() => { setZoom(1); setPanX(0); setPanY(0); }} title="Fit to Screen">
+            <button className="sidebar-btn" onClick={() => engineRef.current?.fit()} title="Fit to Screen">
               📐
               <div className="sidebar-tooltip">Fit Screen</div>
+            </button>
+            <button className="sidebar-btn" onClick={loadSampleMap} title="Load sample map" disabled={isSeeding}>
+              ✨
+              <div className="sidebar-tooltip">Sample map</div>
             </button>
             <button className="sidebar-btn" onClick={handleClearAll} title="Clear All">
               ⚡
@@ -747,11 +579,18 @@ export default function MapPage() {
         {/* Main Canvas */}
         <div className="main-area">
           <div className="canvas-container" ref={containerRef}>
-            <canvas
-              ref={canvasRef}
-              onClick={handleCanvasClick}
-              onWheel={handleWheel}
-            />
+            <canvas ref={canvasRef} />
+            {!isLoading && nodes.length === 0 && !isSeeding && (
+              <div className="empty-state">
+                <div className="empty-orb" />
+                <h2>Start your mind map</h2>
+                <p>Add your first thought, or watch a sample map build itself.</p>
+                <div className="empty-actions">
+                  <button className="btn" onClick={loadSampleMap}>✨ Load sample map</button>
+                  <button className="btn btn-secondary" onClick={handleAddNode}>＋ Add a node</button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Side Panel - Show Insights or Edit Panel */}
@@ -954,6 +793,56 @@ export default function MapPage() {
             </div>
           </div>
         </div>
+
+        {/* Quick add */}
+        {showQuickAdd && (
+          <div className="quick-add-overlay" onClick={() => setShowQuickAdd(false)}>
+            <form
+              className="quick-add"
+              onClick={(e) => e.stopPropagation()}
+              onSubmit={(e) => { e.preventDefault(); submitQuickAdd(); }}
+            >
+              <div className="quick-add-header">
+                <span>New thought</span>
+                <kbd>Enter</kbd>
+              </div>
+              <input
+                autoFocus
+                value={quickAdd.title}
+                onChange={(e) => setQuickAdd({ ...quickAdd, title: e.target.value })}
+                onKeyDown={(e) => e.key === 'Escape' && setShowQuickAdd(false)}
+                placeholder={selectedNode ? `Branch off “${nodes.find(n => n.id === selectedNode)?.title ?? ''}”…` : 'What’s on your mind?'}
+              />
+              <div className="quick-add-row">
+                <div className="swatches">
+                  {['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#14b8a6'].map(c => (
+                    <button
+                      type="button"
+                      key={c}
+                      className={`swatch ${quickAdd.color === c ? 'active' : ''}`}
+                      style={{ background: c }}
+                      onClick={() => setQuickAdd({ ...quickAdd, color: c })}
+                      aria-label={`Color ${c}`}
+                    />
+                  ))}
+                </div>
+                <div className="priorities">
+                  {(['low', 'medium', 'high', 'urgent'] as const).map(p => (
+                    <button
+                      type="button"
+                      key={p}
+                      className={`priority-chip ${quickAdd.priority === p ? 'active' : ''}`}
+                      onClick={() => setQuickAdd({ ...quickAdd, priority: p })}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button type="submit" className="btn quick-add-submit" disabled={!quickAdd.title.trim()}>Add to map</button>
+            </form>
+          </div>
+        )}
 
         {/* Tips & Instructions */}
         {showTips && (
@@ -1354,6 +1243,152 @@ export default function MapPage() {
           display: flex;
         }
 
+        .empty-state {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          pointer-events: none;
+          animation: fadeInUp 0.6s ease;
+        }
+        .empty-state h2 {
+          margin-top: 28px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 28px;
+          color: #f1f5f9;
+        }
+        .empty-state p {
+          margin-top: 8px;
+          color: #94a3b8;
+          font-size: 15px;
+        }
+        .empty-actions {
+          margin-top: 24px;
+          display: flex;
+          gap: 12px;
+          pointer-events: auto;
+        }
+        .empty-orb {
+          width: 96px;
+          height: 96px;
+          border-radius: 50%;
+          background: radial-gradient(circle at 35% 30%, #ffffff 0%, #60a5fa 18%, #3b82f6 55%, #1e3a8a 100%);
+          box-shadow: 0 0 60px rgba(59, 130, 246, 0.55), 0 0 140px rgba(139, 92, 246, 0.35);
+          animation: orbFloat 4s ease-in-out infinite;
+        }
+        @keyframes orbFloat {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-10px) scale(1.04); }
+        }
+        .quick-add-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 200;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding-top: 18vh;
+          background: rgba(2, 6, 23, 0.55);
+          backdrop-filter: blur(6px);
+          animation: fadeIn 0.2s ease;
+        }
+        .quick-add {
+          width: min(520px, calc(100vw - 32px));
+          background: rgba(15, 23, 42, 0.92);
+          border: 1px solid rgba(96, 165, 250, 0.3);
+          border-radius: 18px;
+          padding: 18px;
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+          animation: quickIn 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+        }
+        @keyframes quickIn {
+          from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+          to { opacity: 1; transform: none; }
+        }
+        .quick-add-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          color: #94a3b8;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+        }
+        .quick-add-header kbd {
+          font-family: inherit;
+          font-size: 11px;
+          padding: 2px 8px;
+          border-radius: 6px;
+          border: 1px solid rgba(148, 163, 184, 0.3);
+          text-transform: none;
+          letter-spacing: 0;
+        }
+        .quick-add input {
+          width: 100%;
+          margin-top: 12px;
+          background: transparent;
+          border: none;
+          outline: none;
+          color: #f8fafc;
+          font-size: 22px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-weight: 600;
+        }
+        .quick-add input::placeholder {
+          color: #475569;
+        }
+        .quick-add-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          margin-top: 16px;
+          flex-wrap: wrap;
+        }
+        .swatches, .priorities {
+          display: flex;
+          gap: 8px;
+        }
+        .swatch {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          cursor: pointer;
+          transition: transform 0.15s ease;
+        }
+        .swatch:hover { transform: scale(1.15); }
+        .swatch.active {
+          border-color: #ffffff;
+          box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+        }
+        .priority-chip {
+          padding: 4px 10px;
+          border-radius: 999px;
+          border: 1px solid rgba(148, 163, 184, 0.25);
+          background: transparent;
+          color: #94a3b8;
+          font-size: 12px;
+          text-transform: capitalize;
+          cursor: pointer;
+        }
+        .priority-chip.active {
+          background: rgba(59, 130, 246, 0.2);
+          border-color: #60a5fa;
+          color: #e2e8f0;
+        }
+        .quick-add-submit {
+          width: 100%;
+          margin-top: 16px;
+        }
+        .quick-add-submit:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
         .canvas-container {
           flex: 1;
           position: relative;
@@ -1364,9 +1399,12 @@ export default function MapPage() {
 
         canvas {
           display: block;
+          position: absolute;
+          inset: 0;
           width: 100%;
           height: 100%;
-          cursor: pointer;
+          cursor: grab;
+          touch-action: none;
           will-change: transform;
           transform: translateZ(0);
           backface-visibility: hidden;

@@ -14,6 +14,8 @@ export const ItemSchema = z.object({
   reminderTime: z.string().optional(), // Time in HH:MM format
   reminderRecurrence: z.enum(['none', 'daily', 'weekly', 'monthly']).optional(),
   lastNotified: z.date().optional(),
+  x: z.number().optional(), // Position on the map canvas
+  y: z.number().optional(),
 });
 
 export type Item = z.infer<typeof ItemSchema>;
