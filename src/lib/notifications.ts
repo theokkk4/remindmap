@@ -19,7 +19,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 export function sendNotification(title: string, body: string, options?: NotificationOptions) {
-  if (Notification.permission === 'granted') {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     new Notification(title, {
       body,
       icon: '/logo.svg',
@@ -29,8 +29,10 @@ export function sendNotification(title: string, body: string, options?: Notifica
   }
 }
 
-export function checkReminders(items: Item[]): void {
+/** Sends any reminders that are due now and returns the items that fired. */
+export function checkReminders(items: Item[]): Item[] {
   const now = new Date();
+  const fired: Item[] = [];
 
   items.forEach(item => {
     if (!item.reminderEnabled || !item.reminderTime) return;
@@ -67,7 +69,9 @@ export function checkReminders(items: Item[]): void {
         requireInteraction: false,
       }
     );
+    fired.push(item);
   });
+  return fired;
 }
 
 export function scheduleReminderCheck(items: Item[], callback: (id: string) => void): NodeJS.Timeout {

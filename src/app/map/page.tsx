@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAllItems, addItem, updateItem, deleteItem, clearAllItems } from '@/lib/store/db';
 import type { Item } from '@/lib/types';
-import { requestNotificationPermission, checkReminders } from '@/lib/notifications';
+import { requestNotificationPermission, checkReminders, sendNotification } from '@/lib/notifications';
+import { useLiteNotice } from '@/components/LiteNotice';
 import { MapEngine } from '@/lib/mapEngine';
 import { SAMPLE_MAP } from '@/lib/sampleMap';
 
@@ -29,10 +30,20 @@ export default function MapPage() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAdd, setQuickAdd] = useState({ title: '', color: '#3b82f6', priority: 'medium' as CanvasNode['priority'] });
   const [isSeeding, setIsSeeding] = useState(false);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const liteNotice = useLiteNotice();
+  const showToast = useCallback((message: string) => {
+    setToast({ id: Date.now(), message });
+  }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [showTips, setShowTips] = useState(true);
@@ -66,12 +77,6 @@ export default function MapPage() {
   // Request notification permission and load data from IndexedDB
   useEffect(() => {
     async function init() {
-      // Request notification permission
-      const hasPermission = await requestNotificationPermission();
-      if (hasPermission) {
-        console.log('Notification permission granted');
-      }
-
       // Load data
       const items = await getAllItems();
       const canvasNodes: CanvasNode[] = items.map((item, index) => ({
@@ -89,20 +94,53 @@ export default function MapPage() {
       }));
       setNodes(canvasNodes);
 
-      // Start checking reminders every minute
-      const intervalId = setInterval(() => {
-        checkReminders(items);
-      }, 60000);
-
       // Minimum loading time for smooth transition
       setTimeout(() => {
         setIsLoading(false);
       }, 800);
-
-      return () => clearInterval(intervalId);
     }
     init();
   }, []);
+
+  // Check reminders against the current nodes (not a snapshot from page load).
+  const nodesRef = useRef<CanvasNode[]>([]);
+  nodesRef.current = nodes;
+  const lastNotifiedRef = useRef(new Map<string, Date>());
+  useEffect(() => {
+    const tick = () => {
+      const fired = checkReminders(
+        nodesRef.current.map(n => ({
+          id: n.id,
+          title: n.title,
+          description: n.description,
+          reminderEnabled: n.reminderEnabled,
+          reminderTime: n.reminderTime,
+          reminderRecurrence: n.reminderRecurrence,
+          lastNotified: lastNotifiedRef.current.get(n.id),
+        }))
+      );
+      for (const item of fired) {
+        lastNotifiedRef.current.set(item.id, new Date());
+        showToast(`🔔 Reminder: ${item.title}`);
+      }
+    };
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, [showToast]);
+
+  const testReminder = async () => {
+    const title = formData.title || 'Your reminder';
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      sendNotification(`Reminder: ${title}`, formData.description || 'This is how your reminder will look.');
+      showToast(`🔔 Test reminder sent for “${title}”`);
+    } else {
+      showToast(`🔔 Reminder: ${title} — browser notifications are off, so reminders show here`);
+    }
+  };
+
+  const editModeRef = useRef(editMode);
+  editModeRef.current = editMode;
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -114,7 +152,7 @@ export default function MapPage() {
 
       const key = e.key.toLowerCase();
 
-      if (key === 'n') {
+      if (key === 'n' && editModeRef.current) {
         e.preventDefault();
         handleAddNode();
       } else if (key === 's') {
@@ -156,6 +194,11 @@ export default function MapPage() {
   useEffect(() => {
     engineRef.current?.setSelected(selectedNode);
   }, [selectedNode]);
+
+  useEffect(() => {
+    engineRef.current?.setEditable(editMode);
+    if (!editMode) setIsPanelOpen(false);
+  }, [editMode]);
 
   useEffect(() => {
     engineRef.current?.setZoom(zoom);
@@ -395,10 +438,10 @@ export default function MapPage() {
 
     try {
       await navigator.clipboard.writeText(text);
-      alert('Copied to clipboard!');
+      showToast('📋 Map copied to clipboard');
     } catch (err) {
       console.error('Failed to copy:', err);
-      alert('Failed to copy to clipboard');
+      showToast('Couldn’t reach the clipboard — try Download JSON instead');
     }
     setShowExportMenu(false);
   };
@@ -428,11 +471,8 @@ export default function MapPage() {
               throw new Error(`Invalid node at index ${index}: Missing id or title`);
             }
 
-            // Generate random positions for imported nodes
             return {
               ...node,
-              x: (Math.random() - 0.5) * 400,
-              y: (Math.random() - 0.5) * 400,
               priority: node.priority || 'medium',
               color: node.color || '#3b82f6',
               description: node.description || '',
@@ -440,29 +480,27 @@ export default function MapPage() {
             };
           });
 
-          // Add to IndexedDB
+          // Create each node through the normal path so ids match the database.
           for (const node of validatedNodes) {
-            await addItem({
-              title: node.title,
-              priority: node.priority,
-              color: node.color,
+            await createNode(node.title, node.color, node.priority, undefined, {
               description: node.description,
-              dueDate: node.dueDate ? new Date(node.dueDate) : undefined,
+              dueDate: node.dueDate ? String(node.dueDate).split('T')[0] : '',
               reminderEnabled: node.reminderEnabled,
               reminderTime: node.reminderTime,
-              reminderRecurrence: node.reminderRecurrence
+              reminderRecurrence: node.reminderRecurrence,
             });
+            await new Promise(r => setTimeout(r, 120));
           }
+          setTimeout(() => engineRef.current?.fit(), 400);
 
-          setNodes([...nodes, ...validatedNodes]);
-          alert(`Successfully imported ${validatedNodes.length} nodes!`);
+          showToast(`📤 Imported ${validatedNodes.length} node${validatedNodes.length === 1 ? '' : 's'}`);
         } catch (error) {
           if (error instanceof SyntaxError) {
-            alert('Import failed: Invalid JSON format. Please check your file.');
+            showToast('Import failed: that file isn’t valid JSON');
           } else if (error instanceof Error) {
-            alert(`Import failed: ${error.message}`);
+            showToast(`Import failed: ${error.message}`);
           } else {
-            alert('Import failed: Unknown error occurred');
+            showToast('Import failed — please try another file');
           }
           console.error('Import error:', error);
         }
@@ -471,7 +509,7 @@ export default function MapPage() {
       input.click();
       setShowExportMenu(false);
     } catch (error) {
-      alert('Failed to open file picker');
+      showToast('Couldn’t open the file picker');
       console.error('File picker error:', error);
     }
   };
@@ -521,12 +559,13 @@ export default function MapPage() {
             <span>ReMindMap</span>
           </div>
           <div className="navbar-controls">
-            <span className={`mode-badge ${editMode ? '' : 'view'}`}>
-              {editMode ? 'Edit Mode' : 'View Mode'}
-            </span>
-            <button className="btn" onClick={() => setEditMode(!editMode)}>
-              {editMode ? '👁️ View Mode' : '✏️ Edit Mode'}
+            <button className="lite-pill" onClick={() => liteNotice({ reason: 'info' })} title="About this demo">
+              <span className="lite-dot" /> Lite demo
             </button>
+            <div className="mode-switch" role="group" aria-label="Mode">
+              <button className={!editMode ? 'active' : ''} onClick={() => setEditMode(false)}>👁️ View</button>
+              <button className={editMode ? 'active' : ''} onClick={() => setEditMode(true)}>✏️ Edit</button>
+            </div>
             <div style={{ position: 'relative' }}>
               <button className="btn btn-secondary" onClick={() => setShowExportMenu(!showExportMenu)}>
                 📥 Export
@@ -552,6 +591,7 @@ export default function MapPage() {
         </nav>
 
         {/* Sidebar */}
+        {editMode && (
         <div className="sidebar">
             <button className="sidebar-btn" onClick={handleAddNode} title="Add Node">
               ➕
@@ -566,6 +606,10 @@ export default function MapPage() {
               📐
               <div className="sidebar-tooltip">Fit Screen</div>
             </button>
+            <button className="sidebar-btn" onClick={() => liteNotice({ reason: 'api', feature: 'AI Assist' })} title="AI Assist">
+              🤖
+              <div className="sidebar-tooltip">AI Assist</div>
+            </button>
             <button className="sidebar-btn" onClick={loadSampleMap} title="Load sample map" disabled={isSeeding}>
               ✨
               <div className="sidebar-tooltip">Sample map</div>
@@ -575,9 +619,10 @@ export default function MapPage() {
               <div className="sidebar-tooltip">Clear All</div>
             </button>
         </div>
+        )}
 
         {/* Main Canvas */}
-        <div className="main-area">
+        <div className={`main-area ${editMode ? '' : 'full'}`}>
           <div className="canvas-container" ref={containerRef}>
             <canvas ref={canvasRef} />
             {!isLoading && nodes.length === 0 && !isSeeding && (
@@ -586,15 +631,15 @@ export default function MapPage() {
                 <h2>Start your mind map</h2>
                 <p>Add your first thought, or watch a sample map build itself.</p>
                 <div className="empty-actions">
-                  <button className="btn" onClick={loadSampleMap}>✨ Load sample map</button>
-                  <button className="btn btn-secondary" onClick={handleAddNode}>＋ Add a node</button>
+                  <button className="btn" onClick={() => { setEditMode(true); loadSampleMap(); }}>✨ Load sample map</button>
+                  <button className="btn btn-secondary" onClick={() => { setEditMode(true); handleAddNode(); }}>＋ Add a node</button>
                 </div>
               </div>
             )}
           </div>
 
           {/* Side Panel - Show Insights or Edit Panel */}
-          {showRightPanel && (
+          {showRightPanel && editMode && (
             <div className="side-panel open">
             {isPanelOpen ? (
               // Edit Panel
@@ -676,7 +721,10 @@ export default function MapPage() {
                     <input
                       type="checkbox"
                       checked={formData.reminderEnabled}
-                      onChange={(e) => setFormData({ ...formData, reminderEnabled: e.target.checked })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, reminderEnabled: e.target.checked });
+                        if (e.target.checked) requestNotificationPermission();
+                      }}
                     />
                     <span>Enable Reminders</span>
                   </label>
@@ -707,6 +755,10 @@ export default function MapPage() {
                         <option value="monthly">Monthly</option>
                       </select>
                     </div>
+
+                    <button type="button" className="btn btn-secondary test-reminder" onClick={testReminder}>
+                      🔔 Send a test reminder
+                    </button>
                   </>
                 )}
               </div>
@@ -761,6 +813,18 @@ export default function MapPage() {
                     </div>
                   </div>
 
+                  <div className="insight-section">
+                    <div className="insight-header">🤖 AI Analysis</div>
+                    {['Deadline risk analysis', 'Conflict detection', 'Smart suggestions'].map(feature => (
+                      <div className="insight-item" key={feature}>
+                        <div className="insight-label">{feature}</div>
+                        <button className="unlock-btn" onClick={() => liteNotice({ reason: 'api', feature })}>
+                          🔒 Full version
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="insight-tip">
                     💡 Click any node to edit it
                   </div>
@@ -793,6 +857,21 @@ export default function MapPage() {
             </div>
           </div>
         </div>
+
+        {/* Toast */}
+        {toast && (
+          <div className="toast" key={toast.id} role="status">
+            {toast.message}
+          </div>
+        )}
+
+        {/* View mode hint */}
+        {!editMode && (
+          <div className="view-hint">
+            👁️ View mode — drag to pan, scroll to zoom
+            <button onClick={() => setEditMode(true)}>✏️ Edit</button>
+          </div>
+        )}
 
         {/* Quick add */}
         {showQuickAdd && (
@@ -1243,6 +1322,132 @@ export default function MapPage() {
           display: flex;
         }
 
+        .mode-switch {
+          display: inline-flex;
+          padding: 4px;
+          border-radius: 12px;
+          background: rgba(15, 23, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .mode-switch button {
+          padding: 7px 14px;
+          border: none;
+          border-radius: 9px;
+          background: transparent;
+          color: #94a3b8;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .mode-switch button:hover {
+          color: #e2e8f0;
+        }
+        .mode-switch button.active {
+          background: linear-gradient(135deg, #3b82f6, #6366f1);
+          color: #fff;
+          box-shadow: 0 6px 18px -6px rgba(59, 130, 246, 0.8);
+        }
+
+        .main-area.full {
+          left: 0;
+        }
+
+        .lite-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          border-radius: 999px;
+          border: 1px solid rgba(251, 191, 36, 0.35);
+          background: rgba(251, 191, 36, 0.1);
+          color: #fcd34d;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+        .lite-pill:hover {
+          background: rgba(251, 191, 36, 0.18);
+        }
+        .lite-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #fcd34d;
+          box-shadow: 0 0 8px #fcd34d;
+        }
+
+        .unlock-btn {
+          padding: 4px 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(96, 165, 250, 0.35);
+          background: rgba(59, 130, 246, 0.12);
+          color: #93c5fd;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .unlock-btn:hover {
+          background: rgba(59, 130, 246, 0.22);
+        }
+
+        .test-reminder {
+          width: 100%;
+          margin-top: 4px;
+        }
+
+        .toast {
+          position: fixed;
+          left: 50%;
+          bottom: 100px;
+          z-index: 300;
+          transform: translateX(-50%);
+          padding: 12px 18px;
+          border-radius: 14px;
+          background: rgba(15, 23, 42, 0.95);
+          border: 1px solid rgba(96, 165, 250, 0.35);
+          color: #e2e8f0;
+          font-size: 14px;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+          animation: toastIn 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+          max-width: calc(100vw - 32px);
+        }
+        @keyframes toastIn {
+          from { opacity: 0; transform: translate(-50%, 12px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        .view-hint {
+          position: fixed;
+          top: 86px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 60;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 8px 8px 16px;
+          border-radius: 999px;
+          background: rgba(15, 23, 42, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #cbd5e1;
+          font-size: 13px;
+          backdrop-filter: blur(8px);
+          animation: fadeIn 0.3s ease;
+        }
+        .view-hint button {
+          padding: 5px 12px;
+          border-radius: 999px;
+          border: none;
+          background: #3b82f6;
+          color: white;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
         .empty-state {
           position: absolute;
           inset: 0;
@@ -1539,10 +1744,28 @@ export default function MapPage() {
         }
 
         .form-checkbox input[type="checkbox"] {
-          width: 18px;
-          height: 18px;
+          -webkit-appearance: none;
+          appearance: none;
+          flex-shrink: 0;
+          width: 20px;
+          height: 20px;
+          border-radius: 6px;
+          border: 1.5px solid rgba(148, 163, 184, 0.55);
+          background: rgba(15, 23, 42, 0.6);
           cursor: pointer;
-          accent-color: #3b82f6;
+          transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .form-checkbox input[type="checkbox"]:hover {
+          border-color: #60a5fa;
+        }
+        .form-checkbox input[type="checkbox"]:checked {
+          border-color: #3b82f6;
+          background: #3b82f6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / 14px no-repeat;
+          box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+        }
+        .form-checkbox input[type="checkbox"]:focus-visible {
+          outline: 2px solid #93c5fd;
+          outline-offset: 2px;
         }
 
         .form-label {

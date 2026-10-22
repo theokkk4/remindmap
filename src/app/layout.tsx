@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from 'next/font/google';
 import "./globals.css";
 import PWAInstaller from '@/components/PWAInstaller';
+import { LiteNoticeProvider } from '@/components/LiteNotice';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -56,7 +57,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${spaceGrotesk.variable} antialiased bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen`}>
         <PWAInstaller />
-        {children}
+        <LiteNoticeProvider>{children}</LiteNoticeProvider>
       </body>
     </html>
   );

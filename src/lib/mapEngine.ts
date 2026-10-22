@@ -109,7 +109,7 @@ export class MapEngine {
   private dpr = 1;
   private cam = { x: 0, y: 0, zoom: 1 };
   private camTarget = { x: 0, y: 0, zoom: 1 };
-  private drag: { mode: 'pan' | 'node'; id?: string; sx: number; sy: number; moved: boolean; cx: number; cy: number } | null = null;
+  private drag: { mode: 'pan' | 'node'; id?: string; hit?: string; sx: number; sy: number; moved: boolean; cx: number; cy: number } | null = null;
   private resizeObserver: ResizeObserver;
   private firstSync = true;
   private start = performance.now();
@@ -196,6 +196,13 @@ export class MapEngine {
     } else if (this.firstSync) {
       this.firstSync = false;
     }
+  }
+
+  private editable = true;
+
+  /** In view mode nodes can still be clicked, but not dragged. */
+  setEditable(editable: boolean) {
+    this.editable = editable;
   }
 
   setSelected(id: string | null) {
@@ -289,7 +296,8 @@ export class MapEngine {
   private onDown = (e: PointerEvent) => {
     const p = this.local(e);
     const id = this.hit(p.x, p.y);
-    this.drag = { mode: id ? 'node' : 'pan', id: id ?? undefined, sx: p.x, sy: p.y, moved: false, cx: this.camTarget.x, cy: this.camTarget.y };
+    const dragNode = id !== null && this.editable;
+    this.drag = { mode: dragNode ? 'node' : 'pan', id: dragNode ? id : undefined, hit: id ?? undefined, sx: p.x, sy: p.y, moved: false, cx: this.camTarget.x, cy: this.camTarget.y };
     this.canvas.setPointerCapture?.(e.pointerId);
   };
 
@@ -337,10 +345,10 @@ export class MapEngine {
     }
     const p = this.local(e);
     const w = this.toWorld(p.x, p.y);
-    if (d.mode === 'node' && d.id) {
-      const n = this.nodes.get(d.id)!;
-      this.ripples.push({ x: n.x, y: n.y, born: performance.now(), color: n.data.color });
-      this.cb.onSelect(d.id);
+    const clicked = d.hit ? this.nodes.get(d.hit) : undefined;
+    if (clicked) {
+      this.ripples.push({ x: clicked.x, y: clicked.y, born: performance.now(), color: clicked.data.color });
+      this.cb.onSelect(clicked.data.id);
     } else {
       this.ripples.push({ x: w.x, y: w.y, born: performance.now(), color: '#60a5fa' });
       this.cb.onSelect(null);

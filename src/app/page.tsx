@@ -1,6 +1,10 @@
 'use client';
 
+import { useLiteNotice } from '@/components/LiteNotice';
+import { CONTACT, mailtoFullVersion } from '@/lib/contact';
+
 export default function Home() {
+  const liteNotice = useLiteNotice();
   const handleNavigation = () => {
     window.location.href = '/map';
   };
@@ -190,6 +194,65 @@ export default function Home() {
           -webkit-text-fill-color: transparent;
           background-clip: text;
           margin-bottom: 1.5rem;
+        }
+
+        .lite-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 1.5rem;
+          padding: 8px 16px;
+          border-radius: 999px;
+          border: 1px solid rgba(251, 191, 36, 0.35);
+          background: rgba(251, 191, 36, 0.1);
+          color: #fde68a;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s ease, transform 0.2s ease;
+        }
+        .lite-chip:hover {
+          background: rgba(251, 191, 36, 0.18);
+          transform: translateY(-1px);
+        }
+        .lite-chip-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #fcd34d;
+          box-shadow: 0 0 10px #fcd34d;
+        }
+        .full-version {
+          margin-top: 2rem;
+          padding-top: 1.5rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .full-version p {
+          font-size: 0.95rem !important;
+          color: #cbd5e1;
+          margin-bottom: 1rem !important;
+        }
+        .full-version-links {
+          display: flex;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .full-version-links a {
+          padding: 10px 18px;
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          color: #e2e8f0;
+          text-decoration: none;
+          font-weight: 500;
+          transition: background 0.2s ease;
+        }
+        .full-version-links a:hover {
+          background: rgba(59, 130, 246, 0.25);
+        }
+        .footer-bottom a {
+          color: #93c5fd;
         }
 
         .hero-subtitle {
@@ -596,6 +659,9 @@ export default function Home() {
 
       <section className="hero">
         <div className="hero-content">
+          <button className="lite-chip" onClick={() => liteNotice({ reason: 'info' })}>
+            <span className="lite-chip-dot" /> Lite demo — no API key needed · Get the full version →
+          </button>
           <div className="hero-subtitle">AI-Powered Mind Mapping for Teams & Individuals</div>
           <h1>Think Smarter, Not Harder</h1>
           <p>The only mind mapping tool with AI-powered deadline risk analysis and conflict detection. Beautiful glass-morphism design meets intelligent insights. Perfect for teams, students, and professionals managing complex projects.</p>
@@ -729,13 +795,22 @@ export default function Home() {
             Launch ReMindMap
             <span>🚀</span>
           </button>
+          <div className="full-version">
+            <p>
+              This is a dumbed-down demo with the AI features switched off. Want the full version? Hit me up.
+            </p>
+            <div className="full-version-links">
+              <a href={CONTACT.linkedin} target="_blank" rel="noreferrer">💬 DM on LinkedIn</a>
+              <a href={mailtoFullVersion('ReMindMap')}>✉️ {CONTACT.email}</a>
+            </div>
+          </div>
         </div>
       </section>
 
       <footer>
         <div className="footer-content">
           <div className="footer-bottom">
-            <p>&copy; 2025 ReMindMap. Hackathon Edition. | Making thinking visual, together. ✨</p>
+            <p>&copy; 2025 ReMindMap. Lite demo edition. | Full version: <a href={CONTACT.linkedin} target="_blank" rel="noreferrer">LinkedIn</a> · <a href={mailtoFullVersion('ReMindMap')}>{CONTACT.email}</a></p>
           </div>
         </div>
       </footer>
