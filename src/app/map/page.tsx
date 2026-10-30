@@ -1129,8 +1129,7 @@ export default function MapPage() {
           left: 0;
           right: 0;
           height: 70px;
-          background: rgba(10, 14, 39, 0.8);
-          backdrop-filter: blur(10px);
+          background: rgba(10, 14, 39, 0.94);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           display: flex;
           justify-content: space-between;
@@ -1201,11 +1200,10 @@ export default function MapPage() {
           gap: 14px;
           padding: 8px 10px 8px 16px;
           border-radius: 999px;
-          background: rgba(15, 23, 42, 0.85);
+          background: rgba(15, 23, 42, 0.94);
           border: 1px solid rgba(255, 255, 255, 0.1);
           color: #cbd5e1;
           font-size: 13px;
-          backdrop-filter: blur(8px);
           animation: fadeInUp 0.5s ease 0.2s both;
           white-space: nowrap;
           max-width: calc(100vw - 32px);
@@ -1500,11 +1498,10 @@ export default function MapPage() {
           gap: 12px;
           padding: 8px 8px 8px 16px;
           border-radius: 999px;
-          background: rgba(15, 23, 42, 0.85);
+          background: rgba(15, 23, 42, 0.94);
           border: 1px solid rgba(255, 255, 255, 0.1);
           color: #cbd5e1;
           font-size: 13px;
-          backdrop-filter: blur(8px);
           animation: fadeIn 0.3s ease;
         }
         .view-hint button {
