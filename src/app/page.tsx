@@ -1,817 +1,427 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useLiteNotice } from '@/components/LiteNotice';
 import { CONTACT, mailtoFullVersion } from '@/lib/contact';
 
+const HeroMap = dynamic(() => import('@/components/HeroMap'), { ssr: false });
+
+const FEATURES = [
+  {
+    icon: '◎',
+    title: 'Physics-based canvas',
+    text: 'Nodes spring into place, repel each other and float at rest. Drag anything; links follow with animated particles.',
+  },
+  {
+    icon: '◷',
+    title: 'Reminders that fire',
+    text: 'Daily, weekly or monthly reminders on any node, delivered as browser notifications and in-app toasts.',
+  },
+  {
+    icon: '◆',
+    title: 'Priorities and colour',
+    text: 'Four priority levels change a node’s size; six colours group branches at a glance.',
+  },
+  {
+    icon: '⌘',
+    title: 'Keyboard-first',
+    text: 'N adds a node that branches off your selection. S exports, I opens stats. No menus to dig through.',
+  },
+  {
+    icon: '⇅',
+    title: 'Export and import',
+    text: 'Copy your map as text, download it as JSON, or import a JSON file. Positions are saved too.',
+  },
+  {
+    icon: '◈',
+    title: 'Private by default',
+    text: 'Everything lives in IndexedDB in your browser. Installable as a PWA, works offline, no account.',
+  },
+];
+
+const FULL = ['Deadline risk analysis', 'Conflict detection across branches', 'Smart node suggestions', 'Natural-language capture'];
+
 export default function Home() {
   const liteNotice = useLiteNotice();
-  const handleNavigation = () => {
-    window.location.href = '/map';
-  };
 
   return (
     <>
       <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
+        :root {
+          --bg: #070a17;
+          --surface: rgba(255, 255, 255, 0.035);
+          --line: rgba(255, 255, 255, 0.08);
+          --line-strong: rgba(255, 255, 255, 0.14);
+          --fg: #eef1f8;
+          --dim: #8f97ad;
+          --faint: #5b6378;
+          --blue: #3b82f6;
+          --blue-soft: #7da2ff;
+          --violet: #8b5cf6;
         }
 
-        html {
-          scroll-behavior: smooth;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         body {
-          font-family: 'Inter', sans-serif;
-          background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
-          background-attachment: fixed;
-          color: #ffffff;
-          line-height: 1.6;
-          overflow-x: hidden;
-          width: 100%;
+          background: var(--bg);
+          color: var(--fg);
+          font-family: 'Inter', system-ui, sans-serif;
+          -webkit-font-smoothing: antialiased;
+          overflow-x: clip;
         }
+        body::before { display: none; }
+        h1, h2, h3 { font-family: 'Space Grotesk', 'Inter', sans-serif; letter-spacing: -0.02em; }
+        a { color: inherit; text-decoration: none; }
+        button { font-family: inherit; }
 
-        h1, h2, h3 {
-          font-family: 'Space Grotesk', sans-serif;
-          font-weight: 700;
-        }
+        .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
-        h1 {
-          font-size: clamp(2.5rem, 8vw, 5rem);
-          line-height: 1.1;
+        /* Nav */
+        .nav {
+          position: sticky; top: 0; z-index: 50;
+          height: 64px; display: flex; align-items: center;
+          background: rgba(7, 10, 23, 0.75); backdrop-filter: blur(14px);
+          border-bottom: 1px solid var(--line);
         }
+        .nav .wrap { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+        .brand { display: inline-flex; align-items: center; gap: 10px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; }
+        .brand-mark {
+          width: 26px; height: 26px; border-radius: 8px;
+          background: radial-gradient(circle at 35% 30%, #fff 0%, #93c5fd 18%, #3b82f6 55%, #1e3a8a 100%);
+          box-shadow: 0 0 18px rgba(59, 130, 246, 0.55);
+        }
+        .nav-links { display: none; gap: 28px; font-size: 14px; color: var(--dim); }
+        .nav-links a:hover { color: var(--fg); }
+        @media (min-width: 768px) { .nav-links { display: flex; } }
 
-        h2 {
-          font-size: clamp(1.75rem, 5vw, 3rem);
-          line-height: 1.2;
+        .btn {
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          height: 40px; padding: 0 18px; border-radius: 12px; border: none;
+          font-size: 14px; font-weight: 600; cursor: pointer;
+          transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
         }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary {
+          background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff;
+          box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.9), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+        }
+        .btn-primary:hover { box-shadow: 0 14px 34px -10px rgba(59, 130, 246, 1), inset 0 0 0 1px rgba(255, 255, 255, 0.2); transform: translateY(-1px); }
+        .btn-secondary { background: var(--surface); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-strong); }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.07); }
+        .btn-lg { height: 48px; padding: 0 22px; font-size: 15px; }
+        .btn-sm { height: 34px; padding: 0 14px; font-size: 13px; }
 
-        h3 {
-          font-size: clamp(1.1rem, 3vw, 1.5rem);
+        /* Hero */
+        .hero { position: relative; overflow: hidden; }
+        .hero-glow {
+          position: absolute; inset: 0; pointer-events: none;
+          background:
+            radial-gradient(60% 55% at 70% 20%, rgba(59, 130, 246, 0.22), transparent 70%),
+            radial-gradient(45% 45% at 15% 90%, rgba(139, 92, 246, 0.18), transparent 70%);
         }
-
-        p {
-          font-size: 1rem;
-          color: #e5e5e5;
-          line-height: 1.7;
+        .hero .wrap {
+          position: relative; display: grid; gap: 48px; align-items: center;
+          padding-top: 56px; padding-bottom: 72px;
         }
-
-        .container {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 0 2rem;
+        @media (min-width: 960px) {
+          .hero .wrap { grid-template-columns: 0.95fr 1.05fr; padding-top: 88px; padding-bottom: 96px; }
         }
-
-        nav {
-          position: fixed;
-          top: 0;
-          width: 100%;
-          z-index: 1000;
-          backdrop-filter: blur(10px);
-          background: rgba(10, 14, 39, 0.7);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 1.25rem 2rem;
+        .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip {
+          display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px;
+          border-radius: 999px; font-size: 12.5px; color: var(--dim);
+          background: var(--surface); box-shadow: inset 0 0 0 1px var(--line);
         }
-
-        .nav-container {
-          max-width: 1200px;
-          margin: 0 auto;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+        .chip-live { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399; }
+        .chip-lite {
+          color: #fcd34d; background: rgba(251, 191, 36, 0.1); box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.3);
+          cursor: pointer; border: none;
         }
-
-        .logo {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          font-size: 1.3rem;
-          font-weight: 700;
-          font-family: 'Space Grotesk', sans-serif;
-          color: #ffffff;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .logo:hover {
-          transform: translateY(-2px);
-        }
-
-        .logo-icon {
-          font-size: 1.75rem;
-        }
-
-        .nav-links {
-          display: none;
-          gap: 2rem;
-          align-items: center;
-        }
-
-        .nav-links a {
-          color: #e5e5e5;
-          text-decoration: none;
-          transition: all 0.3s ease;
-          font-weight: 500;
-          font-size: 0.95rem;
-        }
-
-        .nav-links a:hover {
-          color: #60a5fa;
-        }
-
-        .cta-nav {
-          background: linear-gradient(135deg, #3b82f6 0%, #4f46e5 100%);
-          color: white;
-          border: none;
-          padding: 0.65rem 1.5rem;
-          border-radius: 12px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          font-size: 0.9rem;
-        }
-
-        .cta-nav:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
-        }
-
-        @media (min-width: 768px) {
-          .nav-links {
-            display: flex;
-          }
-        }
-
-        .hero {
-          margin-top: 80px;
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 4rem 2rem;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .hero::before {
-          content: '';
-          position: absolute;
-          width: 600px;
-          height: 600px;
-          background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
-          border-radius: 50%;
-          top: -300px;
-          right: -300px;
-          z-index: 0;
-        }
-
-        .hero::after {
-          content: '';
-          position: absolute;
-          width: 500px;
-          height: 500px;
-          background: radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, transparent 70%);
-          border-radius: 50%;
-          bottom: -200px;
-          left: -200px;
-          z-index: 0;
-        }
-
-        .hero-content {
-          position: relative;
-          z-index: 1;
-          text-align: center;
-          max-width: 1000px;
-          animation: fadeInUp 0.8s ease;
-        }
+        .chip-lite:hover { background: rgba(251, 191, 36, 0.18); }
+        .chip-lite .dot { width: 6px; height: 6px; border-radius: 50%; background: #fcd34d; box-shadow: 0 0 8px #fcd34d; }
 
         .hero h1 {
-          background: linear-gradient(135deg, #ffffff 0%, #60a5fa 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          margin-bottom: 1.5rem;
+          margin-top: 24px; font-size: clamp(38px, 5.4vw, 60px); line-height: 1.04; font-weight: 700;
+        }
+        .hero h1 span {
+          background: linear-gradient(90deg, #7da2ff 0%, #c4b5fd 100%);
+          -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+        .hero p { margin-top: 20px; max-width: 460px; font-size: 16.5px; line-height: 1.65; color: var(--dim); }
+        .hero-actions { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .hero-stats {
+          margin-top: 44px; display: grid; grid-template-columns: repeat(3, auto); gap: 32px;
+          padding-top: 24px; border-top: 1px solid var(--line); width: fit-content;
+        }
+        .hero-stats dt { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; }
+        .hero-stats dd { margin-top: 2px; font-size: 12.5px; color: var(--faint); }
+
+        .hero-frame {
+          position: relative; border-radius: 22px; padding: 10px;
+          background: rgba(255, 255, 255, 0.04);
+          box-shadow: inset 0 0 0 1px var(--line-strong), 0 40px 90px -30px rgba(0, 0, 0, 0.9);
+        }
+        .hero-frame::before {
+          content: ''; position: absolute; inset: -40px; z-index: -1; border-radius: 40px;
+          background: radial-gradient(closest-side, rgba(59, 130, 246, 0.25), transparent);
+          filter: blur(10px);
+        }
+        .hero-bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px 10px; }
+        .hero-bar i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); }
+        .hero-bar span { margin-left: 10px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--faint); }
+        .hero-screen { position: relative; height: 420px; border-radius: 14px; overflow: hidden; background: #0a0e27; }
+        @media (min-width: 960px) { .hero-screen { height: 500px; } }
+        .hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+        .hero-caption {
+          position: absolute; left: 14px; bottom: 14px;
+          display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px;
+          border-radius: 999px; font-size: 12px; color: var(--dim);
+          background: rgba(7, 10, 23, 0.8); box-shadow: inset 0 0 0 1px var(--line-strong); backdrop-filter: blur(8px);
         }
 
-        .lite-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 1.5rem;
-          padding: 8px 16px;
-          border-radius: 999px;
-          border: 1px solid rgba(251, 191, 36, 0.35);
-          background: rgba(251, 191, 36, 0.1);
-          color: #fde68a;
-          font-size: 0.9rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: background 0.2s ease, transform 0.2s ease;
+        /* Sections */
+        section { border-top: 1px solid var(--line); }
+        .section { padding: 96px 0; }
+        .eyebrow { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--blue-soft); }
+        .section h2 { margin-top: 12px; font-size: clamp(28px, 3.6vw, 40px); font-weight: 700; line-height: 1.15; }
+        .section-lead { margin-top: 12px; max-width: 520px; font-size: 15px; line-height: 1.6; color: var(--dim); }
+        .section-head { display: flex; flex-direction: column; gap: 16px; justify-content: space-between; }
+        @media (min-width: 768px) { .section-head { flex-direction: row; align-items: flex-end; } }
+
+        .grid { display: grid; gap: 14px; margin-top: 44px; }
+        @media (min-width: 640px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 960px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+        .card {
+          padding: 26px; border-radius: 18px; background: var(--surface);
+          box-shadow: inset 0 0 0 1px var(--line); transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
-        .lite-chip:hover {
-          background: rgba(251, 191, 36, 0.18);
-          transform: translateY(-1px);
+        .card:hover { background: rgba(255, 255, 255, 0.055); box-shadow: inset 0 0 0 1px rgba(125, 162, 255, 0.4); transform: translateY(-2px); }
+        .card-icon {
+          display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px;
+          background: rgba(59, 130, 246, 0.14); color: var(--blue-soft); font-size: 18px;
+          box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3);
         }
-        .lite-chip-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: #fcd34d;
-          box-shadow: 0 0 10px #fcd34d;
+        .card h3 { margin-top: 20px; font-size: 17px; font-weight: 600; }
+        .card p { margin-top: 6px; font-size: 14px; line-height: 1.6; color: var(--dim); }
+
+        /* How it works */
+        .steps { display: grid; gap: 1px; margin-top: 44px; border-radius: 18px; overflow: hidden; background: var(--line); }
+        @media (min-width: 768px) { .steps { grid-template-columns: repeat(3, 1fr); } }
+        .step { padding: 28px; background: #0b0f1f; }
+        .step-num { font-family: ui-monospace, monospace; font-size: 12px; color: var(--faint); }
+        .step kbd {
+          display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px;
+          font-family: ui-monospace, monospace; font-size: 11px; color: var(--fg);
+          background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px var(--line-strong);
         }
-        .full-version {
-          margin-top: 2rem;
-          padding-top: 1.5rem;
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        .step h3 { margin-top: 22px; font-size: 18px; font-weight: 600; }
+        .step p { margin-top: 6px; font-size: 14px; line-height: 1.6; color: var(--dim); }
+
+        /* Full version */
+        .full {
+          margin-top: 44px; display: grid; gap: 24px; padding: 32px; border-radius: 22px;
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(139, 92, 246, 0.1));
+          box-shadow: inset 0 0 0 1px rgba(125, 162, 255, 0.25);
         }
-        .full-version p {
-          font-size: 0.95rem !important;
-          color: #cbd5e1;
-          margin-bottom: 1rem !important;
-        }
-        .full-version-links {
-          display: flex;
-          justify-content: center;
-          flex-wrap: wrap;
-          gap: 12px;
-        }
-        .full-version-links a {
-          padding: 10px 18px;
-          border-radius: 12px;
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          color: #e2e8f0;
-          text-decoration: none;
-          font-weight: 500;
-          transition: background 0.2s ease;
-        }
-        .full-version-links a:hover {
-          background: rgba(59, 130, 246, 0.25);
-        }
-        .footer-bottom a {
-          color: #93c5fd;
-        }
+        @media (min-width: 860px) { .full { grid-template-columns: 1.1fr 0.9fr; align-items: center; padding: 40px; } }
+        .full h3 { font-size: 26px; font-weight: 700; }
+        .full p { margin-top: 10px; font-size: 15px; line-height: 1.6; color: var(--dim); }
+        .full ul { margin-top: 18px; display: grid; gap: 10px; font-size: 14px; }
+        .full li { display: flex; align-items: center; gap: 10px; }
+        .full li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399; }
+        .full-actions { display: flex; flex-direction: column; gap: 10px; }
+        .full-actions .btn { width: 100%; }
+        .full-note { font-size: 12.5px; color: var(--faint); text-align: center; }
 
-        .hero-subtitle {
-          font-size: 1.3rem;
-          color: #e5e5e5;
-          margin-bottom: 1rem;
-        }
+        footer { border-top: 1px solid var(--line); padding: 32px 0; font-size: 12.5px; color: var(--faint); }
+        footer .wrap { display: flex; flex-direction: column; gap: 10px; }
+        @media (min-width: 768px) { footer .wrap { flex-direction: row; align-items: center; justify-content: space-between; } }
+        footer a { color: var(--blue-soft); }
 
-        .hero p {
-          font-size: 1.1rem;
-          color: #e5e5e5;
-          margin-bottom: 3rem;
-          max-width: 800px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-
-        .cta-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.75rem;
-          background: linear-gradient(135deg, #3b82f6 0%, #4f46e5 100%);
-          color: white;
-          padding: 1.25rem 3rem;
-          border-radius: 24px;
-          border: none;
-          font-weight: 600;
-          font-size: 1.1rem;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
-          text-decoration: none;
-        }
-
-        .cta-button:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 16px 48px rgba(59, 130, 246, 0.4);
-        }
-
-        .features {
-          padding: 6rem 2rem;
-          position: relative;
-        }
-
-        .section-header {
-          text-align: center;
-          margin-bottom: 4rem;
-        }
-
-        .section-header h2 {
-          margin-bottom: 1rem;
-          background: linear-gradient(135deg, #ffffff 0%, #60a5fa 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-
-        .section-header p {
-          font-size: 1.1rem;
-          color: #94a3b8;
-          max-width: 600px;
-          margin: 0 auto;
-        }
-
-        .features-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 2rem;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .feature-card {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 2.5rem;
-          border-radius: 24px;
-          backdrop-filter: blur(10px);
-          transition: all 0.3s ease;
-          cursor: pointer;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .feature-card::before {
-          content: '';
-          position: absolute;
-          top: -50%;
-          right: -50%;
-          width: 300px;
-          height: 300px;
-          background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .feature-card:hover {
-          background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(59, 130, 246, 0.3);
-          transform: translateY(-8px);
-          box-shadow: 0 16px 48px rgba(59, 130, 246, 0.15);
-        }
-
-        .feature-card:hover::before {
-          opacity: 1;
-        }
-
-        .feature-icon {
-          width: 60px;
-          height: 60px;
-          background: linear-gradient(135deg, #3b82f6 0%, #4f46e5 100%);
-          border-radius: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.75rem;
-          margin-bottom: 1.5rem;
-          transition: transform 0.3s ease;
-        }
-
-        .feature-card:hover .feature-icon {
-          transform: scale(1.1) rotate(5deg);
-        }
-
-        .feature-card h3 {
-          margin-bottom: 1rem;
-          color: #ffffff;
-        }
-
-        .feature-card p {
-          font-size: 0.95rem;
-          color: #94a3b8;
-        }
-
-        .use-cases {
-          padding: 6rem 2rem;
-          background: linear-gradient(180deg, transparent 0%, rgba(79, 70, 229, 0.05) 50%, transparent 100%);
-        }
-
-        .use-cases h2 {
-          background: linear-gradient(135deg, #ffffff 0%, #60a5fa 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-
-        .use-cases-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: 2rem;
-          max-width: 1200px;
-          margin: 0 auto;
-          margin-top: 3rem;
-        }
-
-        .use-case-card {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-          border: 1px solid rgba(59, 130, 246, 0.2);
-          padding: 2rem;
-          border-radius: 20px;
-          backdrop-filter: blur(10px);
-          text-align: center;
-          transition: all 0.3s ease;
-          cursor: pointer;
-        }
-
-        .use-case-card:hover {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(79, 70, 229, 0.05) 100%);
-          border-color: rgba(59, 130, 246, 0.5);
-          transform: translateY(-8px);
-          box-shadow: 0 12px 40px rgba(59, 130, 246, 0.2);
-        }
-
-        .use-case-icon {
-          font-size: 2.75rem;
-          margin-bottom: 1rem;
-        }
-
-        .use-case-card h3 {
-          margin-bottom: 0.75rem;
-          font-size: 1.25rem;
-        }
-
-        .use-case-card p {
-          font-size: 0.9rem;
-          color: #94a3b8;
-        }
-
-        .tech-stack {
-          padding: 6rem 2rem;
-        }
-
-        .tech-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 2rem;
-          max-width: 1200px;
-          margin: 0 auto;
-          margin-top: 3rem;
-        }
-
-        .tech-item {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 2rem;
-          border-radius: 16px;
-          backdrop-filter: blur(10px);
-          text-align: center;
-          transition: all 0.3s ease;
-        }
-
-        .tech-item:hover {
-          background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(59, 130, 246, 0.3);
-          transform: translateY(-4px);
-        }
-
-        .tech-item h4 {
-          font-size: 0.95rem;
-          color: #60a5fa;
-          font-weight: 600;
-          margin-bottom: 0.5rem;
-        }
-
-        .tech-item p {
-          font-size: 0.85rem;
-          color: #94a3b8;
-        }
-
-        .cta-section {
-          padding: 6rem 2rem;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        .cta-card {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(79, 70, 229, 0.1) 100%);
-          border: 1px solid rgba(59, 130, 246, 0.3);
-          padding: 3.5rem 4rem;
-          border-radius: 24px;
-          backdrop-filter: blur(10px);
-          text-align: center;
-          max-width: 700px;
-          transition: all 0.3s ease;
-        }
-
-        .cta-card:hover {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(79, 70, 229, 0.15) 100%);
-          border-color: rgba(59, 130, 246, 0.5);
-          transform: scale(1.02);
-        }
-
-        .cta-card h2 {
-          margin-bottom: 1rem;
-        }
-
-        .cta-card p {
-          margin-bottom: 2.5rem;
-          font-size: 1.05rem;
-        }
-
-        footer {
-          background: rgba(30, 41, 59, 0.5);
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 3rem 2rem;
-          text-align: center;
-        }
-
-        .footer-content {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .footer-bottom {
-          color: #94a3b8;
-          font-size: 0.9rem;
-        }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .feature-card {
-          animation: fadeInUp 0.6s ease;
-          animation-fill-mode: both;
-        }
-
-        .feature-card:nth-child(1) { animation-delay: 0.1s; }
-        .feature-card:nth-child(2) { animation-delay: 0.2s; }
-        .feature-card:nth-child(3) { animation-delay: 0.3s; }
-
-        .use-case-card {
-          animation: fadeInUp 0.6s ease;
-          animation-fill-mode: both;
-        }
-
-        .use-case-card:nth-child(1) { animation-delay: 0.1s; }
-        .use-case-card:nth-child(2) { animation-delay: 0.2s; }
-        .use-case-card:nth-child(3) { animation-delay: 0.3s; }
-        .use-case-card:nth-child(4) { animation-delay: 0.4s; }
-
-        .tech-item {
-          animation: fadeInUp 0.6s ease;
-          animation-fill-mode: both;
-        }
-
-        .tech-item:nth-child(1) { animation-delay: 0.1s; }
-        .tech-item:nth-child(2) { animation-delay: 0.2s; }
-        .tech-item:nth-child(3) { animation-delay: 0.3s; }
-        .tech-item:nth-child(4) { animation-delay: 0.4s; }
-        .tech-item:nth-child(5) { animation-delay: 0.5s; }
-        .tech-item:nth-child(6) { animation-delay: 0.6s; }
-
-        @media (max-width: 768px) {
-          nav {
-            padding: 1rem;
-          }
-
-          .hero {
-            margin-top: 60px;
-            min-height: auto;
-            padding: 2rem 1rem;
-          }
-
-          .hero h1 {
-            font-size: 2rem;
-          }
-
-          .hero-subtitle {
-            font-size: 1.1rem;
-          }
-
-          .hero p {
-            font-size: 1rem;
-          }
-
-          .features, .use-cases, .tech-stack, .cta-section {
-            padding: 4rem 1rem;
-          }
-
-          .cta-card {
-            padding: 2.5rem 1.5rem;
-          }
-
-          .feature-card, .use-case-card, .tech-item {
-            padding: 1.5rem;
-          }
-        }
-
-        @media (max-width: 480px) {
-          h1 {
-            font-size: 1.5rem;
-          }
-
-          h2 {
-            font-size: 1.2rem;
-          }
-
-          .cta-button {
-            padding: 1rem 2rem;
-            font-size: 1rem;
-          }
-
-          .features, .use-cases, .tech-stack {
-            padding: 2.5rem 1rem;
-          }
-
-          .feature-card, .use-case-card, .tech-item {
-            padding: 1.25rem;
-          }
-
-          .cta-card {
-            padding: 2rem 1rem;
-          }
-
-          footer {
-            padding: 2rem 1rem;
-          }
-        }
+        @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+        .rise-2 { animation-delay: 0.12s; }
       `}</style>
 
-      <nav>
-        <div className="nav-container">
-          <div className="logo">
-            <span className="logo-icon">🧠</span>
-            <span>ReMindMap</span>
-          </div>
-          <div className="nav-links">
+      <header className="nav">
+        <div className="wrap">
+          <Link href="/" className="brand">
+            <span className="brand-mark" /> ReMindMap
+          </Link>
+          <nav className="nav-links">
             <a href="#features">Features</a>
-            <a href="#use-cases">Use Cases</a>
-            <a href="#tech">Tech</a>
-            <button onClick={handleNavigation} className="cta-nav">Launch App</button>
-          </div>
+            <a href="#how">How it works</a>
+            <a href="#full">Full version</a>
+          </nav>
+          <Link href="/map" className="btn btn-primary btn-sm">
+            Open the app
+          </Link>
         </div>
-      </nav>
+      </header>
 
-      <section className="hero">
-        <div className="hero-content">
-          <button className="lite-chip" onClick={() => liteNotice({ reason: 'info' })}>
-            <span className="lite-chip-dot" /> Lite demo — no API key needed · Get the full version →
-          </button>
-          <div className="hero-subtitle">AI-Powered Mind Mapping for Teams & Individuals</div>
-          <h1>Think Smarter, Not Harder</h1>
-          <p>The only mind mapping tool with AI-powered deadline risk analysis and conflict detection. Beautiful glass-morphism design meets intelligent insights. Perfect for teams, students, and professionals managing complex projects.</p>
-          <button onClick={handleNavigation} className="cta-button">
-            Try the App
-            <span>✨</span>
-          </button>
-        </div>
-      </section>
+      <main>
+        <section className="hero" style={{ borderTop: 'none' }}>
+          <div className="hero-glow" />
+          <div className="wrap">
+            <div className="rise">
+              <div className="chip-row">
+                <span className="chip">
+                  <span className="chip-live" /> Live demo · no account
+                </span>
+                <button className="chip chip-lite" onClick={() => liteNotice({ reason: 'info' })}>
+                  <span className="dot" /> Lite build · no API key
+                </button>
+              </div>
+              <h1>
+                Mind maps that <span>move with your thinking.</span>
+              </h1>
+              <p>
+                A physics-driven canvas for ideas, plans and reminders. Nodes spring into place, branches grow as you type, and
+                nothing leaves your browser.
+              </p>
+              <div className="hero-actions">
+                <Link href="/map" className="btn btn-primary btn-lg">
+                  Open the app →
+                </Link>
+                <a href="#how" className="btn btn-secondary btn-lg">
+                  How it works
+                </a>
+              </div>
+              <dl className="hero-stats">
+                <div>
+                  <dt>60 fps</dt>
+                  <dd>canvas renderer</dd>
+                </div>
+                <div>
+                  <dt>0</dt>
+                  <dd>accounts or servers</dd>
+                </div>
+                <div>
+                  <dt>1 key</dt>
+                  <dd>to add a node</dd>
+                </div>
+              </dl>
+            </div>
 
-      <section id="features" className="features">
-        <div className="container">
-          <div className="section-header">
-            <h2>What Makes ReMindMap Different</h2>
-            <p>A mind mapping tool that's not just functional—it's beautiful, intelligent, and a joy to use</p>
-          </div>
-          <div className="features-grid">
-            <div className="feature-card">
-              <div className="feature-icon">🎨</div>
-              <h3>Modern Glass Design</h3>
-              <p>Glossy, translucent nodes with gradient fills and shine effects. Every interaction feels like interacting with glass spheres floating in digital space.</p>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">🔔</div>
-              <h3>Recurring Reminders</h3>
-              <p>Set daily, weekly, or monthly reminders for any node. Browser notifications keep you on track with habits, deadlines, and recurring tasks.</p>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">🎯</div>
-              <h3>Priority-Based Organization</h3>
-              <p>Color-coded by urgency with Low, Medium, High, and Urgent levels. Instantly see what matters most in your mind map.</p>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">🤖</div>
-              <h3>AI-Powered Insights</h3>
-              <p>Intelligent deadline risk analysis, conflict detection, and workload distribution insights. Get proactive warnings about competing deadlines and overload.</p>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">⚡</div>
-              <h3>Smart Conflict Detection</h3>
-              <p>Automatically detects scheduling conflicts, overlapping deadlines, and workload imbalances. Unique to ReMindMap - no other mind mapping tool does this.</p>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">🔒</div>
-              <h3>Privacy-First Security</h3>
-              <p>Enterprise-grade local data storage with IndexedDB. Your data never leaves your device. Perfect for teams handling sensitive information.</p>
+            <div className="hero-frame rise rise-2">
+              <div className="hero-bar">
+                <i />
+                <i />
+                <i />
+                <span>remindmap · building a map</span>
+              </div>
+              <div className="hero-screen">
+                <HeroMap />
+                <span className="hero-caption">
+                  <span className="chip-live" /> Rendered live by the real engine
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="use-cases" className="use-cases">
-        <div className="container">
-          <div className="section-header">
-            <h2>Perfect for Any Workflow</h2>
-            <p>From brainstorming to project management to research</p>
-          </div>
-          <div className="use-cases-grid">
-            <div className="use-case-card">
-              <div className="use-case-icon">💡</div>
-              <h3>Brainstorming</h3>
-              <p>Quickly capture ideas in visual nodes. Use colors to group related thoughts and organize them spatially on your canvas.</p>
+        <section id="features" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">What’s in the demo</p>
+                <h2>Everything here actually works.</h2>
+              </div>
+              <p className="section-lead">No mock buttons. Every feature below runs in this build, in your browser, right now.</p>
             </div>
-            <div className="use-case-card">
-              <div className="use-case-icon">📊</div>
-              <h3>Project Planning</h3>
-              <p>Break down projects into tasks. Use priority levels (low, medium, high, urgent) with color-coding to see what needs attention first.</p>
-            </div>
-            <div className="use-case-card">
-              <div className="use-case-icon">📚</div>
-              <h3>Study Notes</h3>
-              <p>Create visual summaries of topics you're learning. Add descriptions, due dates for exams, and organize notes by subject using colors.</p>
-            </div>
-            <div className="use-case-card">
-              <div className="use-case-icon">🔔</div>
-              <h3>Task Reminders</h3>
-              <p>Set recurring reminders (daily, weekly, monthly) with browser notifications for habits, deadlines, or recurring tasks.</p>
+            <div className="grid">
+              {FEATURES.map((f) => (
+                <article className="card" key={f.title}>
+                  <div className="card-icon">{f.icon}</div>
+                  <h3>{f.title}</h3>
+                  <p>{f.text}</p>
+                </article>
+              ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="tech" className="tech-stack">
-        <div className="container">
-          <div className="section-header">
-            <h2>Built with Modern Tech</h2>
-            <p>Cutting-edge stack for performance and scalability</p>
+        <section id="how" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">How it works</p>
+                <h2>Three keys and a canvas.</h2>
+              </div>
+              <Link href="/map" className="btn btn-secondary">
+                Try it with a sample map
+              </Link>
+            </div>
+            <ol className="steps">
+              <li className="step">
+                <span className="step-num">
+                  01 <kbd>N</kbd>
+                </span>
+                <h3>Add a thought</h3>
+                <p>Press N, type, hit Enter. The node branches off whatever you have selected and springs into free space.</p>
+              </li>
+              <li className="step">
+                <span className="step-num">
+                  02 <kbd>drag</kbd>
+                </span>
+                <h3>Shape the map</h3>
+                <p>Drag nodes and they push neighbours aside. Scroll to zoom toward the cursor, drag the background to pan.</p>
+              </li>
+              <li className="step">
+                <span className="step-num">
+                  03 <kbd>🔔</kbd>
+                </span>
+                <h3>Never forget it</h3>
+                <p>Open any node, set a daily, weekly or monthly reminder, and get notified in the browser when it’s due.</p>
+              </li>
+            </ol>
           </div>
-          <div className="tech-grid">
-            <div className="tech-item">
-              <h4>Next.js 16</h4>
-              <p>React 19 with App Router</p>
-            </div>
-            <div className="tech-item">
-              <h4>TypeScript</h4>
-              <p>Type-safe development</p>
-            </div>
-            <div className="tech-item">
-              <h4>Canvas API</h4>
-              <p>GPU-accelerated rendering</p>
-            </div>
-            <div className="tech-item">
-              <h4>Framer Motion</h4>
-              <p>Smooth animations</p>
-            </div>
-            <div className="tech-item">
-              <h4>IndexedDB</h4>
-              <p>Offline data persistence</p>
-            </div>
-            <div className="tech-item">
-              <h4>PWA Support</h4>
-              <p>Works offline</p>
-            </div>
-            <div className="tech-item">
-              <h4>AI Algorithms</h4>
-              <p>Predictive analytics</p>
-            </div>
-            <div className="tech-item">
-              <h4>LocalStorage Security</h4>
-              <p>Privacy-first architecture</p>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="launch" className="cta-section">
-        <div className="cta-card">
-          <h2>Ready to think differently?</h2>
-          <p>Experience the future of mind mapping. Built for hackathon. Designed for innovation.</p>
-          <button onClick={handleNavigation} className="cta-button">
-            Launch ReMindMap
-            <span>🚀</span>
-          </button>
-          <div className="full-version">
-            <p>
-              This is a dumbed-down demo with the AI features switched off. Want the full version? Hit me up.
-            </p>
-            <div className="full-version-links">
-              <a href={CONTACT.linkedin} target="_blank" rel="noreferrer">💬 DM on LinkedIn</a>
-              <a href={mailtoFullVersion('ReMindMap')}>✉️ {CONTACT.email}</a>
+        <section id="full" className="section">
+          <div className="wrap">
+            <p className="eyebrow">Full version</p>
+            <h2>This is the lite build.</h2>
+            <div className="full">
+              <div>
+                <h3>The AI layer is switched off here.</h3>
+                <p>
+                  The full version connects the map to a language model. It reads your branches, due dates and priorities and
+                  works with you on them:
+                </p>
+                <ul>
+                  {FULL.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="full-actions">
+                <a href={CONTACT.linkedin} target="_blank" rel="noreferrer" className="btn btn-primary btn-lg">
+                  DM me on LinkedIn
+                </a>
+                <a href={mailtoFullVersion('ReMindMap')} className="btn btn-secondary btn-lg">
+                  {CONTACT.email}
+                </a>
+                <p className="full-note">Hit me up and I’ll set you up with the full version.</p>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
       <footer>
-        <div className="footer-content">
-          <div className="footer-bottom">
-            <p>&copy; 2025 ReMindMap. Lite demo edition. | Full version: <a href={CONTACT.linkedin} target="_blank" rel="noreferrer">LinkedIn</a> · <a href={mailtoFullVersion('ReMindMap')}>{CONTACT.email}</a></p>
-          </div>
+        <div className="wrap">
+          <span className="brand">
+            <span className="brand-mark" /> ReMindMap
+          </span>
+          <p>
+            Lite demo · runs entirely in your browser · <a href={CONTACT.linkedin} target="_blank" rel="noreferrer">LinkedIn</a>
+            {' · '}
+            <a href={mailtoFullVersion('ReMindMap')}>{CONTACT.email}</a>
+          </p>
         </div>
       </footer>
     </>

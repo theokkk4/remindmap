@@ -199,6 +199,8 @@ export class MapEngine {
   }
 
   private editable = true;
+  /** Screen space reserved at the bottom (the map page overlays controls there). */
+  bottomInset = 110;
 
   /** In view mode nodes can still be clicked, but not dragged. */
   setEditable(editable: boolean) {
@@ -225,7 +227,7 @@ export class MapEngine {
       const maxX = Math.max(...xs) + 90;
       const minY = Math.min(...ys) - 90;
       const maxY = Math.max(...ys) + 90;
-      const bottomUi = 110; // zoom and stats controls overlay the bottom of the canvas
+      const bottomUi = this.bottomInset;
       const zoom = clamp(Math.min(this.width / (maxX - minX), (this.height - bottomUi) / (maxY - minY)), MIN_ZOOM, 1.4);
       Object.assign(this.camTarget, { x: (minX + maxX) / 2, y: (minY + maxY) / 2 + bottomUi / 2 / zoom, zoom });
     }

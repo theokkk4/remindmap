@@ -104,11 +104,13 @@ html::-webkit-scrollbar-thumb:hover {
 }
 
 html, body {
-  height: 100%;
+  /* No fixed height: with height:100% + overflow-x:hidden the body becomes its
+     own scroll container, so the window never scrolls and anchors break. */
+  min-height: 100%;
   width: 100%;
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
   background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
   background-color: #0a0e27;
   background-attachment: fixed;
@@ -306,8 +308,8 @@ p, span, div {
   html, body {
     min-height: 100vh;
     min-height: -webkit-fill-available;
-    width: 100vw;
-    overflow-x: hidden;
+    width: 100%;
+    overflow-x: clip;
   }
   
   body {

@@ -46,7 +46,8 @@ export default function MapPage() {
   const [editMode, setEditMode] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [showTips, setShowTips] = useState(true);
+  const [showTips, setShowTips] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showInsights, setShowInsights] = useState(false);
@@ -66,12 +67,10 @@ export default function MapPage() {
     reminderRecurrence: 'none' as 'none' | 'daily' | 'weekly' | 'monthly'
   });
 
-  // Check if tips have been dismissed
+  // First visit: build the sample map and show a short hint (no modal).
+  const firstRunRef = useRef(false);
   useEffect(() => {
-    const tipsDismissed = localStorage.getItem('remindmap-tips-dismissed');
-    if (tipsDismissed === 'true') {
-      setShowTips(false);
-    }
+    firstRunRef.current = localStorage.getItem('remindmap-visited') !== 'true';
   }, []);
 
   // Request notification permission and load data from IndexedDB
@@ -97,6 +96,13 @@ export default function MapPage() {
       // Minimum loading time for smooth transition
       setTimeout(() => {
         setIsLoading(false);
+        if (firstRunRef.current && items.length === 0) {
+          localStorage.setItem('remindmap-visited', 'true');
+          setTimeout(() => {
+            loadSampleMapRef.current();
+            setShowHint(true);
+          }, 300);
+        }
       }, 800);
     }
     init();
@@ -181,7 +187,13 @@ export default function MapPage() {
       onZoom: (z) => setZoom(Math.round(z * 100) / 100),
     });
     engineRef.current = engine;
+    const applyInset = () => {
+      engine.bottomInset = window.innerWidth <= 768 ? 70 : 110;
+    };
+    applyInset();
+    window.addEventListener('resize', applyInset);
     return () => {
+      window.removeEventListener('resize', applyInset);
       engine.destroy();
       engineRef.current = null;
     };
@@ -233,6 +245,7 @@ export default function MapPage() {
   };
 
   const handleAddNode = () => {
+    setShowHint(false);
     setQuickAdd(q => ({ ...q, title: '' }));
     setShowQuickAdd(true);
   };
@@ -289,6 +302,7 @@ export default function MapPage() {
   };
 
   // Builds a sample map one node at a time, so it animates in.
+  const loadSampleMapRef = useRef<() => void>(() => {});
   const loadSampleMap = async () => {
     if (isSeeding) return;
     setIsSeeding(true);
@@ -300,6 +314,7 @@ export default function MapPage() {
     setIsSeeding(false);
     setTimeout(() => engineRef.current?.fit(), 300);
   };
+  loadSampleMapRef.current = loadSampleMap;
 
   const handleSaveNode = async () => {
     if (!selectedNode) return;
@@ -343,10 +358,7 @@ export default function MapPage() {
     setSelectedNode(null);
   };
 
-  const handleDismissTips = () => {
-    setShowTips(false);
-    localStorage.setItem('remindmap-tips-dismissed', 'true');
-  };
+  const handleDismissTips = () => setShowTips(false);
 
   // Calculate insights
   const getInsights = useCallback(() => {
@@ -551,11 +563,11 @@ export default function MapPage() {
         </div>
       )}
 
-      <div className="map-container" style={{ opacity: isLoading ? 0 : 1, transition: 'opacity 0.5s ease' }}>
+      <div className={`map-container ${isPanelOpen ? 'editing' : ''}`} style={{ opacity: isLoading ? 0 : 1, transition: 'opacity 0.5s ease' }}>
         {/* Navbar */}
         <nav className="navbar">
-          <div className="navbar-logo" onClick={() => router.push('/')}>
-            <span className="navbar-logo-icon">🧠</span>
+          <div className="navbar-logo" onClick={() => router.push('/')} title="Back to site">
+            <span className="brand-mark" />
             <span>ReMindMap</span>
           </div>
           <div className="navbar-controls">
@@ -567,7 +579,7 @@ export default function MapPage() {
               <button className={editMode ? 'active' : ''} onClick={() => setEditMode(true)}>✏️ Edit</button>
             </div>
             <div style={{ position: 'relative' }}>
-              <button className="btn btn-secondary" onClick={() => setShowExportMenu(!showExportMenu)}>
+              <button className="btn btn-secondary export-btn" onClick={() => setShowExportMenu(!showExportMenu)}>
                 📥 Export
               </button>
               {showExportMenu && (
@@ -580,6 +592,9 @@ export default function MapPage() {
                   </button>
                   <button className="export-option" onClick={importFromJSON}>
                     📤 Import JSON
+                  </button>
+                  <button className="export-option help-option" onClick={() => { setShowExportMenu(false); setShowTips(true); }}>
+                    💡 Help
                   </button>
                 </div>
               )}
@@ -640,7 +655,7 @@ export default function MapPage() {
 
           {/* Side Panel - Show Insights or Edit Panel */}
           {showRightPanel && editMode && (
-            <div className="side-panel open">
+            <div className={`side-panel open ${isPanelOpen ? 'editing' : 'insights'}`}>
             {isPanelOpen ? (
               // Edit Panel
               <>
@@ -862,6 +877,14 @@ export default function MapPage() {
         {toast && (
           <div className="toast" key={toast.id} role="status">
             {toast.message}
+          </div>
+        )}
+
+        {/* First-run hint */}
+        {showHint && !showQuickAdd && !isPanelOpen && (
+          <div className="first-hint">
+            <span>Click a node to edit it · press <kbd>N</kbd> to add one · drag to move</span>
+            <button onClick={() => setShowHint(false)} aria-label="Dismiss">✕</button>
           </div>
         )}
 
@@ -1160,6 +1183,53 @@ export default function MapPage() {
           cursor: pointer;
         }
 
+        .brand-mark {
+          width: 26px;
+          height: 26px;
+          border-radius: 8px;
+          background: radial-gradient(circle at 35% 30%, #fff 0%, #93c5fd 18%, #3b82f6 55%, #1e3a8a 100%);
+          box-shadow: 0 0 18px rgba(59, 130, 246, 0.55);
+        }
+        .first-hint {
+          position: fixed;
+          top: 86px;
+          left: calc(80px + (100vw - 80px - 350px) / 2);
+          transform: translateX(-50%);
+          z-index: 60;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 8px 10px 8px 16px;
+          border-radius: 999px;
+          background: rgba(15, 23, 42, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #cbd5e1;
+          font-size: 13px;
+          backdrop-filter: blur(8px);
+          animation: fadeInUp 0.5s ease 0.2s both;
+          white-space: nowrap;
+          max-width: calc(100vw - 32px);
+        }
+        .first-hint kbd {
+          padding: 1px 7px;
+          border-radius: 6px;
+          font-family: ui-monospace, monospace;
+          font-size: 11px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          color: #fff;
+        }
+        .first-hint button {
+          border: none;
+          background: rgba(255, 255, 255, 0.06);
+          color: #94a3b8;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 11px;
+        }
+        .first-hint button:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
         .navbar-logo-icon {
           font-size: 1.75rem;
         }
@@ -1924,6 +1994,7 @@ export default function MapPage() {
         }
 
         /* Export Menu */
+        .export-option.help-option { display: none; }
         .export-menu {
           position: absolute;
           top: calc(100% + 0.5rem);
@@ -2170,62 +2241,101 @@ export default function MapPage() {
 
         @media (max-width: 768px) {
           .navbar {
-            padding: 0 1rem;
+            padding: 0 0.875rem;
+            height: 60px;
           }
+          .navbar-logo { font-size: 1.05rem; gap: 0.5rem; }
+          .brand-mark { width: 22px; height: 22px; }
+          .navbar-controls { gap: 0.5rem; }
+          .navbar-controls .btn { padding: 0.45rem 0.7rem; font-size: 0.8rem; }
+          .lite-pill { padding: 0; width: 28px; height: 28px; justify-content: center; font-size: 0; border-radius: 50%; }
+          .lite-pill .lite-dot { margin: 0; }
+          .navbar-controls > .btn.btn-secondary { display: none; }
+          .navbar-controls .btn-secondary.export-btn { display: flex; }
+          .navbar-controls .export-btn { padding: 0.45rem 0.6rem; font-size: 0; }
+          .navbar-controls .export-btn::before { content: '📥'; font-size: 0.95rem; }
+          .mode-switch button { padding: 6px 10px; font-size: 12px; }
+          .first-hint {
+            left: 50%;
+            white-space: normal;
+            text-align: center;
+            top: auto;
+            bottom: calc(64px + 64px);
+            left: 16px;
+            right: 16px;
+            transform: none;
+            font-size: 12px;
+            justify-content: space-between;
+          }
+          .view-hint { top: 68px; font-size: 12px; }
 
+          /* Sidebar becomes a bottom toolbar */
           .sidebar {
-            width: 60px;
+            top: auto;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            height: 64px;
+            flex-direction: row;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0 0.5rem;
+            border-right: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
           }
+          .sidebar .divider { display: none; }
+          .sidebar-btn { width: 44px; height: 44px; font-size: 1.1rem; margin: 0; }
+          .sidebar-tooltip { display: none; }
 
           .main-area {
-            left: 60px;
+            top: 60px;
+            left: 0;
+            bottom: 64px;
           }
+          .main-area.full { bottom: 0; }
 
+          /* Side panel as a bottom sheet, only while editing */
           .side-panel {
-            width: 100%;
             position: fixed;
+            left: 0;
             right: 0;
-            top: 70px;
-            bottom: 0;
+            bottom: 64px;
+            top: auto;
+            width: 100%;
+            max-height: 62vh;
+            border-left: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px 18px 0 0;
+            box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.5);
           }
+          .side-panel.insights { display: none; }
 
           .bottom-control-bar {
-            left: calc(60px + 0.75rem);
-            bottom: 1rem;
-            flex-direction: column;
-            align-items: flex-start;
+            left: 0.75rem;
+            right: 0.75rem;
+            bottom: calc(64px + 0.75rem);
             gap: 0.5rem;
+            z-index: 30;
           }
+          .map-container.editing .bottom-control-bar { display: none; }
+          .bottom-stats { font-size: 0.75rem; padding: 0.5rem 0.75rem; }
+          .zoom-controls { padding: 0.25rem; }
+          .zoom-display { min-width: 44px; font-size: 0.8rem; }
 
-          .bottom-stats {
-            font-size: 0.75rem;
-          }
+          .empty-state h2 { font-size: 22px; }
+          .empty-state p { font-size: 14px; padding: 0 24px; }
+          .empty-actions { flex-direction: column; align-items: stretch; padding: 0 24px; width: 100%; }
 
-          .tips-card {
-            padding: 2rem 1.5rem;
-            max-width: 95%;
-          }
-
-          .tips-title {
-            font-size: 1.5rem;
-          }
-
-          .tip-item {
-            padding: 0.875rem;
-          }
-
-          .tip-item p {
-            font-size: 0.875rem;
-          }
-
-          .export-menu {
-            min-width: 160px;
-          }
-
-          .export-option {
-            padding: 0.75rem 1rem;
-            font-size: 0.85rem;
-          }
+          .tips-card { padding: 1.5rem 1.25rem; max-width: 95%; }
+          .tips-title { font-size: 1.4rem; }
+          .tip-item { padding: 0.75rem; }
+          .tip-item p { font-size: 0.85rem; }
+          .export-menu { min-width: 190px; }
+          .export-option { white-space: nowrap; }
+          .export-option.help-option { display: flex; }
+          .export-option { padding: 0.75rem 1rem; font-size: 0.85rem; }
+          .quick-add-overlay { padding-top: 12vh; }
         }
       `}</style>
     </>
